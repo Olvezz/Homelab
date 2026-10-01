@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
+import type { AiConnection, AiConnectionInput, AiKind, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -407,6 +407,229 @@ function SshConnections(): React.JSX.Element {
   )
 }
 
+const AI_MODELS: Record<AiKind, string[]> = {
+  anthropic: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-haiku-4-5-20251001'],
+  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+  openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'],
+  ollama: ['llama3.1', 'qwen2.5', 'mistral']
+}
+const AI_BASE: Record<AiKind, string> = {
+  anthropic: 'https://api.anthropic.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  openai: 'https://api.openai.com/v1',
+  ollama: 'http://localhost:11434/v1'
+}
+
+interface AiForm {
+  id?: string
+  name: string
+  kind: AiKind
+  baseUrl: string
+  model: string
+  apiKey: string
+  clearKey: boolean
+  hasKey: boolean
+}
+const emptyAi: AiForm = { name: '', kind: 'anthropic', baseUrl: '', model: AI_MODELS.anthropic[0], apiKey: '', clearKey: false, hasKey: false }
+
+function AiConnections(): React.JSX.Element {
+  const connections = useStore((s) => s.aiConnections)
+  const setConnections = useStore((s) => s.setAiConnections)
+  const askConfirm = useStore((s) => s.askConfirm)
+  const ui = useStore((s) => s.ui)
+  const setUi = useStore((s) => s.setUi)
+  const [form, setForm] = useState<AiForm>(emptyAi)
+  const [error, setError] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const kindLabel: Record<AiKind, string> = {
+    anthropic: t('aiKindAnthropic'),
+    gemini: t('aiKindGemini'),
+    openai: t('aiKindOpenai'),
+    ollama: t('aiKindOllama')
+  }
+  const toForm = (c: AiConnection): AiForm => ({
+    id: c.id, name: c.name, kind: c.kind, baseUrl: c.baseUrl ?? '', model: c.model, apiKey: '', clearKey: false, hasKey: c.hasKey
+  })
+
+  const build = (): AiConnectionInput | null => {
+    const fail = (m: string): null => {
+      setError(m)
+      return null
+    }
+    if (!form.name.trim()) return fail(t('errName'))
+    if (!/^[A-Za-z0-9._:/-]{1,100}$/.test(form.model.trim())) return fail(t('errModel'))
+    if (form.baseUrl.trim() && !/^https?:\/\//i.test(form.baseUrl.trim())) return fail(t('errUrl'))
+    const keyGiven = !!form.apiKey || (form.hasKey && !form.clearKey)
+    if (form.kind !== 'ollama' && !keyGiven) return fail(t('errKeyRequired'))
+    return {
+      id: form.id,
+      name: form.name.trim(),
+      kind: form.kind,
+      baseUrl: form.baseUrl.trim() || undefined,
+      model: form.model.trim(),
+      apiKey: form.clearKey ? '' : form.apiKey || undefined
+    }
+  }
+
+  const test = async (): Promise<void> => {
+    const input = build()
+    if (!input) return
+    setError('')
+    setResult(null)
+    setTesting(true)
+    try {
+      setResult(await window.api.testAi(input))
+    } catch (e) {
+      setResult({ ok: false, message: errMsg(e) })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    const input = build()
+    if (!input) return
+    try {
+      const saved = await window.api.saveAi(input)
+      setConnections(saved)
+      if (!ui.lastAiId && saved[0]) setUi({ lastAiId: saved[saved.length - 1].id })
+      setForm(emptyAi)
+      setResult(null)
+      setError('')
+    } catch (err) {
+      setError(errMsg(err))
+    }
+  }
+
+  return (
+    <>
+      <h2 id="ai-section">{t('aiConnections')}</h2>
+      <p className="hint">{t('aiConnectionsHint')}</p>
+      <Toggle checked={ui.aiAllowActions} label={t('aiAllowActions')} onChange={(v) => setUi({ aiAllowActions: v })} />
+      {connections.length > 0 && (
+        <ul className="settings-list">
+          {connections.map((c) => (
+            <li key={c.id}>
+              <span className="panel-icon">
+                <Icon k="ui:sparkles" />
+              </span>
+              <span className="settings-name">{c.name}</span>
+              <span className="settings-url">
+                {kindLabel[c.kind]} · {c.model}
+                {c.hasKey ? '' : ' · sin clave'}
+              </span>
+              <button className="btn small" onClick={() => { setForm(toForm(c)); setError(''); setResult(null) }}>
+                {t('edit')}
+              </button>
+              <button
+                className="btn small danger"
+                onClick={() =>
+                  askConfirm({
+                    title: t('aiDeleteTitle', { name: c.name }),
+                    body: t('aiDeleteBody'),
+                    confirmLabel: t('remove'),
+                    danger: true,
+                    onConfirm: () => void window.api.deleteAi(c.id).then(setConnections)
+                  })
+                }
+              >
+                {t('remove')}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form id="ai-form" className="panel-form" onSubmit={(e) => void submit(e)}>
+        <h3>{form.id ? t('aiEdit') : t('aiNew')}</h3>
+        <div className="row">
+          <label className="field grow">
+            <span>{t('name')}</span>
+            <input value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label className="field grow">
+            <span>{t('aiKind')}</span>
+            <select
+              value={form.kind}
+              onChange={(e) => {
+                const kind = e.target.value as AiKind
+                setForm({ ...form, kind, model: AI_MODELS[kind][0], baseUrl: '' })
+                setResult(null)
+              }}
+            >
+              {(Object.keys(kindLabel) as AiKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {kindLabel[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="row">
+          <label className="field grow">
+            <span>{t('aiModel')}</span>
+            <input
+              list={`ai-models-${form.kind}`}
+              value={form.model}
+              spellCheck={false}
+              onChange={(e) => setForm({ ...form, model: e.target.value })}
+            />
+            <datalist id={`ai-models-${form.kind}`}>
+              {AI_MODELS[form.kind].map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </label>
+          {(form.kind === 'openai' || form.kind === 'ollama') && (
+            <label className="field grow">
+              <span>{t('aiBaseUrl')}</span>
+              <input value={form.baseUrl} placeholder={AI_BASE[form.kind]} spellCheck={false} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} />
+            </label>
+          )}
+        </div>
+        <label className="field">
+          <span>
+            {t('aiApiKey')}
+            {form.kind === 'ollama' ? ` (${t('aiKeyOptional')})` : ''}
+          </span>
+          <input
+            type="password"
+            value={form.apiKey}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={form.hasKey && !form.clearKey ? t('aiKeyStored') : ''}
+            onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+          />
+        </label>
+        {form.hasKey && (
+          <label className="check">
+            <input type="checkbox" checked={form.clearKey} onChange={(e) => setForm({ ...form, clearKey: e.target.checked })} />
+            <span>{t('aiClearKey')}</span>
+          </label>
+        )}
+        {error && <div className="error">{error}</div>}
+        {result && <div className={`test-result ${result.ok ? 't-ok' : 't-error'}`}>{result.message}</div>}
+        <div className="form-actions">
+          {(form.id || form.name) && (
+            <button type="button" className="btn" onClick={() => { setForm(emptyAi); setError(''); setResult(null) }}>
+              {t('cancel')}
+            </button>
+          )}
+          <button type="button" className="btn" disabled={testing} onClick={() => void test()}>
+            {testing ? t('aiTesting') : t('aiTest')}
+          </button>
+          <button type="submit" className="btn primary">
+            {t('save')}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+}
+
 function Provisioning(): React.JSX.Element {
   const showToast = useStore((s) => s.showToast)
   const selectPanel = useStore((s) => s.selectPanel)
@@ -732,6 +955,8 @@ export function Settings(): React.JSX.Element {
       <Updates />
 
       <SshConnections />
+
+      <AiConnections />
 
       <Provisioning />
 

@@ -10,6 +10,7 @@ import {
 } from '../shared/types'
 import { panelsSchema, uiPatchSchema, type ConfigStore } from './config/store'
 import {
+  aiConnectionSchema,
   certDecisionSchema,
   connectionSchema,
   guestNameSchema,
@@ -28,6 +29,7 @@ import { buildHostInstaller, DEFAULT_GUEST_SCRIPT, UNINSTALL_COMMAND, validateGu
 import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
+import type { AiManager } from './ai/manager'
 import type { SshManager } from './ssh/manager'
 import type { Updater } from './updater'
 import type { ViewManager } from './viewManager'
@@ -43,10 +45,11 @@ interface Deps {
   onNativeTheme: (mode: 'dark' | 'light') => void
   updater: Updater
   ssh: SshManager
+  ai: AiManager
   setTerminalFocus: (on: boolean) => void
 }
 
-export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, setTerminalFocus }: Deps): void {
+export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, setTerminalFocus }: Deps): void {
   // Solo la UI propia (frame principal de la ventana) puede hablar con el main; nunca una vista remota
   const handle = (channel: string, fn: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
@@ -131,6 +134,22 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
 
   handle(IPC.copyText, (raw) => {
     clipboard.writeText(z.string().max(200000).parse(raw))
+  })
+
+  // ---- Asistente de IA ----
+  handle(IPC.aiList, () => ai.list())
+  handle(IPC.aiSave, (raw) => ai.save(aiConnectionSchema.parse(raw)))
+  handle(IPC.aiDelete, (raw) => ai.delete(z.string().regex(/^ai-[a-z0-9-]{1,40}$/).parse(raw)))
+  handle(IPC.aiTest, (raw) => ai.test(aiConnectionSchema.parse(raw)))
+  handle(IPC.aiSend, (...raw) => {
+    const [connId, text, convId] = z.tuple([z.string().regex(/^ai-[a-z0-9-]{1,40}$/), z.string().min(1).max(8000), z.string().max(100)]).parse(raw)
+    void ai.send(connId, text, convId) // la respuesta llega como eventos
+  })
+  handle(IPC.aiStop, () => ai.stop())
+  handle(IPC.aiReset, () => ai.reset())
+  handle(IPC.aiApprove, (...raw) => {
+    const [callId, ok] = z.tuple([z.string().min(1).max(100), z.boolean()]).parse(raw)
+    ai.approve(callId, ok)
   })
 
   // ---- SSH ----

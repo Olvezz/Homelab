@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { CertPrompt } from './components/CertPrompt'
+import { AiChat } from './components/AiChat'
 import { ConfirmDialog, GuestMenu, ItemMenu, SearchPalette } from './components/Dialogs'
 import { Settings } from './components/Settings'
 import { SshHostPrompt, SshSecretPrompt } from './components/SshDialogs'
@@ -65,6 +66,7 @@ export function App(): React.JSX.Element {
         <Toolbar />
         {page === 'settings' && <Settings />}
         {page === 'wizard' && <Wizard />}
+        {page === 'ai' && <AiChat />}
         <SshView />
         {page === 'view' && !activeId && <div className="placeholder">{t('selectPanel')}</div>}
       </main>

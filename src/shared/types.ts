@@ -23,6 +23,14 @@ export const IPC = {
   pveOpenInPve: 'pve:open-in-pve',
   pveApproveExternal: 'pve:approve-external',
   setNativeTheme: 'theme:native',
+  aiList: 'ai:list',
+  aiSave: 'ai:save',
+  aiDelete: 'ai:delete',
+  aiTest: 'ai:test',
+  aiSend: 'ai:send',
+  aiStop: 'ai:stop',
+  aiReset: 'ai:reset',
+  aiApprove: 'ai:approve',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
@@ -54,6 +62,7 @@ export const IPC = {
   toast: 'toast',
   themeCookie: 'theme:cookie',
   updateStatus: 'update:status',
+  aiEvent: 'ai:event',
   sshData: 'ssh:data',
   sshState: 'ssh:state',
   sshHostPrompt: 'ssh:host-prompt',
@@ -87,6 +96,8 @@ export interface UiConfig {
   closeToTray: boolean
   startWithWindows: boolean
   showTemplates: boolean
+  aiAllowActions: boolean // el asistente puede proponer acciones (siempre con aprobación)
+  lastAiId?: string
   autoUpdate: boolean // comprobar y descargar actualizaciones en segundo plano
   lastActiveId?: string
 }
@@ -178,6 +189,41 @@ export interface UpdateStatus {
   message?: string
   checkedAt?: number
 }
+
+export type AiKind = 'anthropic' | 'gemini' | 'openai' | 'ollama'
+
+export interface AiConnection {
+  id: string
+  name: string
+  kind: AiKind
+  baseUrl?: string // solo openai/ollama (o un proxy propio)
+  model: string
+  hasKey: boolean
+}
+
+export interface AiConnectionInput {
+  id?: string
+  name: string
+  kind: AiKind
+  baseUrl?: string
+  model: string
+  apiKey?: string // undefined = conservar la guardada; '' = borrarla
+}
+
+export type AiEvent =
+  | { convId: string; type: 'text'; text: string }
+  | {
+      convId: string
+      type: 'tool'
+      callId: string
+      name: string
+      summary: string
+      detail: string
+      status: 'running' | 'awaiting'
+    }
+  | { convId: string; type: 'tool-result'; callId: string; status: 'done' | 'error' | 'denied'; result: string }
+  | { convId: string; type: 'done' }
+  | { convId: string; type: 'error'; message: string }
 
 export type SshAuth = 'password' | 'key' | 'agent'
 
@@ -324,6 +370,15 @@ export interface Api {
   onPanels(cb: (panels: Panel[]) => void): () => void
   onSnapshot(cb: (snapshot: PveSnapshot) => void): () => void
   setNativeTheme(mode: 'dark' | 'light'): Promise<void>
+  listAi(): Promise<AiConnection[]>
+  saveAi(input: AiConnectionInput): Promise<AiConnection[]>
+  deleteAi(id: string): Promise<AiConnection[]>
+  testAi(input: AiConnectionInput): Promise<{ ok: boolean; message: string }>
+  sendAi(connId: string, text: string, convId: string): Promise<void>
+  stopAi(): Promise<void>
+  resetAi(): Promise<void>
+  approveAi(callId: string, ok: boolean): Promise<void>
+  onAiEvent(cb: (event: AiEvent) => void): () => void
   listSsh(): Promise<SshConnection[]>
   saveSsh(input: SshConnectionInput): Promise<SshConnection[]>
   deleteSsh(id: string): Promise<SshConnection[]>

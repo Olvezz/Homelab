@@ -366,12 +366,12 @@ export class PveService {
 
   // ---- Acciones de energía ----
 
-  async action(ref: GuestRef, action: PowerAction): Promise<void> {
+  async action(ref: GuestRef, action: PowerAction): Promise<{ ok: boolean; message: string }> {
     const client = this.client
     const g = this.guests.find((x) => x.node === ref.node && x.vmid === ref.vmid && x.type === ref.type)
-    if (!client || !g || g.template) return
+    if (!client || !g || g.template) return { ok: false, message: 'Guest no disponible o es una plantilla' }
     const key = guestKey(g.node, g.vmid)
-    if (this.busy.has(key)) return
+    if (this.busy.has(key)) return { ok: false, message: 'Ya hay una acción en curso sobre este guest' }
 
     const label = `${g.vmid} ${g.name}`
     this.busy.set(key, action)
@@ -382,19 +382,20 @@ export class PveService {
       const upid = await client.power(g.node, g.type, g.vmid, action)
       await this.waitTask(client, g.node, upid)
       this.onToast({ kind: 'ok', text: `${label} ${ACTION_VERB[action].done}` })
+      return { ok: true, message: `${label} ${ACTION_VERB[action].done}` }
     } catch (e) {
+      let message: string
       if (e instanceof HttpError && e.status === 403) {
         this.canPower = false
-        this.onToast({ kind: 'error', text: 'El token no tiene permiso de energía (403)' })
+        message = 'El token no tiene permiso de energía (403)'
       } else if (e instanceof HttpError || e instanceof CertMismatchError) {
-        this.onToast({ kind: 'error', text: `No se pudo completar la acción: ${describeError(e).message}` })
+        message = `No se pudo completar la acción: ${describeError(e).message}`
       } else {
-        this.onToast({
-          kind: 'error',
-          text: `Falló la acción sobre ${label}: ${e instanceof Error ? e.message : 'error desconocido'}`
-        })
+        message = `Falló la acción sobre ${label}: ${e instanceof Error ? e.message : 'error desconocido'}`
       }
+      this.onToast({ kind: 'error', text: message })
       log.warn(`Acción ${action} sobre ${g.type}/${g.vmid} falló: ${e instanceof Error ? e.message : e}`)
+      return { ok: false, message }
     } finally {
       this.busy.delete(key)
       this.forceDetails = true

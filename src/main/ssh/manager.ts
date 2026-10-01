@@ -18,6 +18,7 @@ import { isPpk, PpkError, ppkToOpenSsh } from './ppk'
 import { authForPutty, friendlySshError, hostFingerprint, hostKeyType, parsePuttySessions } from './util'
 
 const MAX_KEY_BYTES = 64 * 1024
+const MAX_EXEC_OUTPUT = 20000
 const WINDOWS_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
 // Lee la clave privada. Los .ppk de PuTTY (v2/v3, RSA/ed25519/ECDSA) se convierten en memoria a OpenSSH;
@@ -129,6 +130,89 @@ export class SshManager {
       added++
     }
     return { added, connections: this.list() }
+  }
+
+  // Ejecuta UN comando sin terminal y devuelve su salida (lo usa el asistente de IA, siempre tras aprobación
+  // del usuario). Solo conecta con servidores cuya huella ya esté confirmada y con credenciales guardadas.
+  async exec(connId: string, command: string, timeoutMs = 60000): Promise<{ exitCode: number | null; output: string; truncated: boolean }> {
+    const conn = this.store.get().ssh.find((c) => c.id === connId)
+    if (!conn) throw new Error('Conexión SSH no encontrada')
+    const saved = this.store.get().sshHostKeys[`${conn.host}:${conn.port}`]
+    if (!saved) throw new Error('La huella del servidor no está confirmada: abre una sesión SSH a ese servidor una vez para confirmarla')
+    let secret: string | undefined
+    if (conn.secretEnc && safeStorage.isEncryptionAvailable()) {
+      try {
+        secret = safeStorage.decryptString(Buffer.from(conn.secretEnc, 'base64'))
+      } catch {
+        secret = undefined
+      }
+    }
+    if (conn.auth === 'password' && !secret) throw new Error('La conexión no tiene la contraseña guardada: guárdala en Ajustes para que el asistente pueda usarla')
+    let privateKey: Buffer | undefined
+    let keyPassphrase: string | undefined
+    if (conn.auth === 'key') {
+      const k = loadPrivateKey(conn.keyPath, secret)
+      privateKey = k.privateKey
+      keyPassphrase = k.passphrase
+    }
+    log.info(`SSH (asistente): ejecutando en ${conn.host}: ${command.slice(0, 80)}`)
+
+    return new Promise((resolve, reject) => {
+      const client = new Client()
+      let output = ''
+      let truncated = false
+      let settled = false
+      const finish = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        try {
+          client.end()
+        } catch {
+          // ya cerrada
+        }
+        fn()
+      }
+      const timer = setTimeout(() => finish(() => reject(new Error(`El comando tardó más de ${Math.round(timeoutMs / 1000)} s y se canceló`))), timeoutMs)
+      const add = (chunk: Buffer): void => {
+        if (output.length >= MAX_EXEC_OUTPUT) {
+          truncated = true
+          return
+        }
+        output += chunk.toString('utf8')
+        if (output.length > MAX_EXEC_OUTPUT) {
+          output = output.slice(0, MAX_EXEC_OUTPUT)
+          truncated = true
+        }
+      }
+      client.on('ready', () => {
+        client.exec(command, (err, stream) => {
+          if (err) return finish(() => reject(new Error(friendlySshError(err.message, conn.host, conn.port, conn.auth))))
+          stream.on('data', add)
+          stream.stderr.on('data', add)
+          stream.on('close', (code: number | null | undefined) => finish(() => resolve({ exitCode: code ?? null, output, truncated })))
+        })
+      })
+      client.on('keyboard-interactive', (_n, _i, _l, prompts, answer) => answer(prompts.map(() => secret ?? '')))
+      client.on('error', (e) => finish(() => reject(new Error(friendlySshError(e.message, conn.host, conn.port, conn.auth)))))
+      client.on('close', () => finish(() => reject(new Error('La conexión se cerró antes de terminar el comando'))))
+      try {
+        client.connect({
+          host: conn.host,
+          port: conn.port,
+          username: conn.username,
+          readyTimeout: 15000,
+          tryKeyboard: conn.auth === 'password',
+          password: conn.auth === 'password' ? secret : undefined,
+          privateKey,
+          passphrase: keyPassphrase,
+          agent: conn.auth === 'agent' ? (process.env.SSH_AUTH_SOCK ?? (existsSync(WINDOWS_AGENT_PIPE) ? WINDOWS_AGENT_PIPE : 'pageant')) : undefined,
+          hostVerifier: ((key: Buffer, verify: (accept: boolean) => void) => verify(hostFingerprint(key) === saved)) as never
+        })
+      } catch (e) {
+        finish(() => reject(new Error(friendlySshError(e instanceof Error ? e.message : String(e), conn.host, conn.port, conn.auth))))
+      }
+    })
   }
 
   // Prueba una conexión sin abrir terminal. Nunca envía credenciales a un servidor cuya huella no esté

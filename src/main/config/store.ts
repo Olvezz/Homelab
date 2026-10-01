@@ -29,6 +29,8 @@ export const uiPatchSchema = z
     closeToTray: z.boolean(),
     startWithWindows: z.boolean(),
     showTemplates: z.boolean(),
+    aiAllowActions: z.boolean(),
+    lastAiId: z.string().regex(/^ai-[a-z0-9-]{1,40}$/),
     autoUpdate: z.boolean(),
     lastActiveId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
   })
@@ -41,6 +43,7 @@ const defaultUi: UiConfig = {
   closeToTray: true,
   startWithWindows: false,
   showTemplates: false,
+  aiAllowActions: true,
   autoUpdate: true
 }
 
@@ -87,6 +90,15 @@ const sshConnSchema = z.object({
   secretEnc: z.string().nullable() // base64 (safeStorage); null = se pide al conectar
 })
 
+const aiConnSchema = z.object({
+  id: z.string().regex(/^ai-[a-z0-9-]{1,40}$/),
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(['anthropic', 'gemini', 'openai', 'ollama']),
+  baseUrl: httpUrlSchema.optional(),
+  model: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/),
+  keyEnc: z.string().nullable() // base64 (safeStorage); null = sin clave o solo en memoria
+})
+
 const configSchema = z.object({
   // Versión de la app que escribió el archivo por última vez (para copias de seguridad al actualizar)
   appVersion: z.string().optional().catch(undefined),
@@ -100,6 +112,8 @@ const configSchema = z.object({
       closeToTray: z.boolean().catch(defaultUi.closeToTray),
       startWithWindows: z.boolean().catch(defaultUi.startWithWindows),
       showTemplates: z.boolean().catch(defaultUi.showTemplates),
+      aiAllowActions: z.boolean().catch(defaultUi.aiAllowActions),
+      lastAiId: z.string().optional().catch(undefined),
       autoUpdate: z.boolean().catch(defaultUi.autoUpdate),
       lastActiveId: z.string().optional().catch(undefined)
     })
@@ -110,6 +124,7 @@ const configSchema = z.object({
   // Orígenes fuera de rangos privados que el usuario aprobó para paneles descubiertos
   approvedExternal: z.array(z.string()).catch([]),
   // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
+  ai: z.array(aiConnSchema).max(20).catch([]), // conexiones con proveedores de IA
   ssh: z.array(sshConnSchema).max(200).catch([]),
   sshHostKeys: z.record(z.string(), z.string()).catch({}),
   // Script que se ejecuta en cada guest nuevo (null = el predeterminado de la app)
@@ -142,7 +157,7 @@ export class ConfigStore {
     const parsed = configSchema.safeParse(raw)
     this.data = parsed.success
       ? parsed.data
-      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ssh: [], sshHostKeys: {} }
+      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ai: [], ssh: [], sshHostKeys: {} }
 
     // Al cambiar de versión se guarda una copia del archivo anterior; los datos viven en
     // %APPDATA%, fuera de la carpeta de la app, así que instalar encima no los toca.
