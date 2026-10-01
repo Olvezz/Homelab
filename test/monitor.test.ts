@@ -115,9 +115,34 @@ describe('MonitorService', () => {
     const svc = new MonitorService(() => client, async () => ({ exitCode: 0, output: '', truncated: false }), () => undefined)
     const s = await svc.get('proxmox', 'hour')
     expect(s.status?.uptime).toBe(100)
-    expect(s.errors.syslog).toContain('PVEAuditor')
+    // el syslog necesita Sys.Syslog, no PVEAuditor: su mensaje no debe pedir el rol que no lo arregla
+    expect(s.errors.syslog).toContain('Sys.Syslog')
+    expect(s.errors.syslog).not.toContain('da al token')
     expect(s.errors.status).toBeUndefined()
     expect(s.errors.processes).toBe(NO_SSH)
+  })
+
+  it('tras dar el permiso, el error desaparece en segundos (no al caducar la caché larga)', async () => {
+    let granted = false
+    const { client } = fakeClient((p) => {
+      if (p.endsWith('/disks/list')) {
+        if (!granted) throw new HttpError(403)
+        return [{ devpath: '/dev/sda', model: 'WD', size: 1, type: 'ssd', health: 'PASSED' }]
+      }
+      return []
+    })
+    const svc = new MonitorService(() => client, async () => ({ exitCode: 0, output: '', truncated: false }), () => undefined)
+    expect((await svc.get('n', 'hour')).errors.disks).toContain('PVEAuditor')
+    granted = true
+    const realNow = Date.now
+    Date.now = () => realNow() + 11_000 // la caché de discos es de 10 min, pero el error solo cuenta 10 s
+    try {
+      const s = await svc.get('n', 'hour')
+      expect(s.errors.disks).toBeUndefined()
+      expect(s.disks).toHaveLength(1)
+    } finally {
+      Date.now = realNow
+    }
   })
 
   it('usa caché: dos consultas seguidas piden cada ruta una sola vez', async () => {

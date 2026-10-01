@@ -284,7 +284,8 @@ export function Home(): React.JSX.Element {
   const guests = snap.guests.filter((g) => !g.template)
   const running = guests.filter((g) => g.status === 'running').length
 
-  const needsPerm = data ? Object.values(data.errors).some((e) => e.includes('PVEAuditor')) : false
+  // Solo cuentan las secciones que PVEAuditor sí arregla; el syslog necesita otro permiso y no activa este aviso
+  const needsPerm = data ? ['status', 'history', 'storage', 'tasks', 'clusterLog', 'services', 'updates', 'disks'].some((k) => data.errors[k]?.includes('PVEAuditor')) : false
   const user = pve?.tokenId.split('!')[0] ?? 'usuario@pve'
   const permCmd = `pveum acl modify / --users ${user} --roles PVEAuditor`
 

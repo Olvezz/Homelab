@@ -26,11 +26,14 @@ interface Entry {
 const TTL = { status: 8_000, history: 45_000, storage: 30_000, tasks: 20_000, clusterLog: 30_000, syslog: 30_000, updates: 300_000, services: 120_000, disks: 600_000, processes: 12_000 }
 
 export const NO_SSH = 'no-configurado'
+const ERROR_RETRY_MS = 10_000
+export const SYSLOG_FORBIDDEN =
+  'Sin permiso para ver el syslog: hace falta el permiso Sys.Syslog, que el rol PVEAuditor no incluye (se lo da PVEAdmin o un rol propio). El resto del panel no lo necesita.'
 
-function describe(e: unknown, what: string): string {
+function describe(e: unknown, what: string, forbidden?: string): string {
   if (e instanceof CertMismatchError) return 'El certificado de Proxmox cambió'
   if (e instanceof HttpError) {
-    if (e.status === 403) return `Sin permiso para ver ${what}: da al token el rol PVEAuditor además de PVEVMUser`
+    if (e.status === 403) return forbidden ?? `Sin permiso para ver ${what}: da al token el rol PVEAuditor además de PVEVMUser`
     if (e.status === 404 || e.status === 501) return `${what} no está disponible en esta versión de Proxmox`
     if (e.status === 401) return 'Token inválido (401)'
     return `Proxmox respondió con error ${e.status}`
@@ -47,15 +50,16 @@ export class MonitorService {
     private monitorSshId: () => string | undefined
   ) {}
 
-  private async section<T>(key: string, ttl: number, what: string, fn: () => Promise<T>): Promise<{ value?: T; error?: string }> {
+  private async section<T>(key: string, ttl: number, what: string, fn: () => Promise<T>, forbidden?: string): Promise<{ value?: T; error?: string }> {
     const hit = this.cache.get(key)
-    if (hit && Date.now() - hit.at < ttl) return { value: hit.value as T | undefined, error: hit.error }
+    const effective = hit?.error ? Math.min(ttl, ERROR_RETRY_MS) : ttl
+    if (hit && Date.now() - hit.at < effective) return { value: hit.value as T | undefined, error: hit.error }
     try {
       const value = await fn()
       this.cache.set(key, { at: Date.now(), value })
       return { value }
     } catch (e) {
-      const error = e instanceof Error && e.message.startsWith('SSH:') ? e.message.slice(4).trim() : describe(e, what)
+      const error = e instanceof Error && e.message.startsWith('SSH:') ? e.message.slice(4).trim() : describe(e, what, forbidden)
       // Se conserva el último dato bueno si lo hay, para que un fallo puntual no vacíe la pantalla
       this.cache.set(key, { at: Date.now(), value: hit?.value, error })
       return { value: hit?.value as T | undefined, error }
@@ -94,7 +98,7 @@ export class MonitorService {
       this.section(k('storage'), TTL.storage, 'el almacenamiento', async () => parseStorage(await client.getMonitor(`${n}/storage`))),
       this.section(k('tasks'), TTL.tasks, 'las tareas', async () => parseTasks(await client.getMonitor(`${n}/tasks?limit=60`))),
       this.section(k('clusterLog'), TTL.clusterLog, 'el registro del clúster', async () => parseClusterLog(await client.getMonitor('/cluster/log?max=80'))),
-      this.section(k('syslog'), TTL.syslog, 'el syslog (necesita el permiso Sys.Syslog)', async () => parseSyslog(await client.getMonitor(`${n}/syslog?limit=120`))),
+      this.section(k('syslog'), TTL.syslog, 'el syslog', async () => parseSyslog(await client.getMonitor(`${n}/syslog?limit=120`)), SYSLOG_FORBIDDEN),
       this.section(k('services'), TTL.services, 'los servicios', async () => parseServices(await client.getMonitor(`${n}/services`))),
       this.section(k('updates'), TTL.updates, 'las actualizaciones', async () => parseApt(await client.getMonitor(`${n}/apt/update`))),
       this.section(k('disks'), TTL.disks, 'los discos', async () => parseDisks(await client.getMonitor(`${n}/disks/list`))),
