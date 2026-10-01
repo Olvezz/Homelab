@@ -145,6 +145,19 @@ describe('MonitorService', () => {
     }
   })
 
+  it('las actualizaciones piden Sys.Modify, no el rol de solo lectura (no activan el aviso)', async () => {
+    const { client } = fakeClient((p) => {
+      if (p.endsWith('/apt/update')) throw new HttpError(403)
+      if (p.endsWith('/status')) return { uptime: 5 }
+      return []
+    })
+    const svc = new MonitorService(() => client, async () => ({ exitCode: 0, output: '', truncated: false }), () => undefined)
+    const s = await svc.get('n', 'hour')
+    expect(s.errors.updates).toContain('Sys.Modify')
+    expect(s.errors.updates).not.toContain('da al token')
+    expect(s.errors.status).toBeUndefined()
+  })
+
   it('usa caché: dos consultas seguidas piden cada ruta una sola vez', async () => {
     const { client, calls } = fakeClient(() => [])
     const svc = new MonitorService(() => client, async () => ({ exitCode: 0, output: '', truncated: false }), () => undefined)

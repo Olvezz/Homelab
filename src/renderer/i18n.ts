@@ -303,6 +303,7 @@ const es = {
   homePermTitle: 'Faltan permisos para algunos datos',
   homePermBody: 'El token puede ver los guests, pero no el estado detallado del nodo, los servicios ni los registros. Dale solo lectura del sistema ejecutando en el shell del nodo:',
   homeCopy: 'Copiar',
+  homeDismiss: 'Ocultar',
   homeUptime: 'Tiempo activo',
   homeCores: 'núcleos',
   homeMemory: 'Memoria',

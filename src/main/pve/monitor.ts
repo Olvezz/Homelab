@@ -27,6 +27,9 @@ const TTL = { status: 8_000, history: 45_000, storage: 30_000, tasks: 20_000, cl
 
 export const NO_SSH = 'no-configurado'
 const ERROR_RETRY_MS = 10_000
+// Listar las actualizaciones exige Sys.Modify (es de escritura): PVEAuditor no lo incluye, es opcional
+export const UPDATES_FORBIDDEN =
+  'Ver las actualizaciones pendientes exige el permiso Sys.Modify, que es de escritura y el rol de solo lectura no incluye. Es opcional: el resto del panel funciona sin él.'
 export const SYSLOG_FORBIDDEN =
   'Sin permiso para ver el syslog: hace falta el permiso Sys.Syslog, que el rol PVEAuditor no incluye (se lo da PVEAdmin o un rol propio). El resto del panel no lo necesita.'
 
@@ -100,7 +103,7 @@ export class MonitorService {
       this.section(k('clusterLog'), TTL.clusterLog, 'el registro del clúster', async () => parseClusterLog(await client.getMonitor('/cluster/log?max=80'))),
       this.section(k('syslog'), TTL.syslog, 'el syslog', async () => parseSyslog(await client.getMonitor(`${n}/syslog?limit=120`)), SYSLOG_FORBIDDEN),
       this.section(k('services'), TTL.services, 'los servicios', async () => parseServices(await client.getMonitor(`${n}/services`))),
-      this.section(k('updates'), TTL.updates, 'las actualizaciones', async () => parseApt(await client.getMonitor(`${n}/apt/update`))),
+      this.section(k('updates'), TTL.updates, 'las actualizaciones', async () => parseApt(await client.getMonitor(`${n}/apt/update`)), UPDATES_FORBIDDEN),
       this.section(k('disks'), TTL.disks, 'los discos', async () => parseDisks(await client.getMonitor(`${n}/disks/list`))),
       sshId
         ? this.section(k(`processes-${sshId}`), TTL.processes, 'los procesos', async () => {

@@ -2095,3 +2095,15 @@ table.grid td.num {
   height: 7px;
   outline: 2px solid var(--bg-side);
 }
+
+.banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+
+.banner .banner-actions .btn {
+  margin-left: 0;
+}

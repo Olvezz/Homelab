@@ -285,7 +285,24 @@ export function Home(): React.JSX.Element {
   const running = guests.filter((g) => g.status === 'running').length
 
   // Solo cuentan las secciones que PVEAuditor sí arregla; el syslog necesita otro permiso y no activa este aviso
-  const needsPerm = data ? ['status', 'history', 'storage', 'tasks', 'clusterLog', 'services', 'updates', 'disks'].some((k) => data.errors[k]?.includes('PVEAuditor')) : false
+  // El aviso grande solo sale si falta lo esencial (el estado del nodo): si eso llega, el rol de solo lectura ya
+  // funciona y cualquier otra sección que falle se explica en su propia tarjeta. Se puede ocultar.
+  const [permDismissed, setPermDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('hl-perm-banner') === '1'
+    } catch {
+      return false
+    }
+  })
+  const needsPerm = !permDismissed && !!data?.errors.status?.includes('PVEAuditor')
+  const dismissPerm = (): void => {
+    setPermDismissed(true)
+    try {
+      localStorage.setItem('hl-perm-banner', '1')
+    } catch {
+      // sin almacenamiento: se oculta solo hasta que se recargue
+    }
+  }
   const user = pve?.tokenId.split('!')[0] ?? 'usuario@pve'
   const permCmd = `pveum acl modify / --users ${user} --roles PVEAuditor`
 
@@ -352,9 +369,14 @@ export function Home(): React.JSX.Element {
             <p>{t('homePermBody')}</p>
             <code>{permCmd}</code>
           </div>
-          <button className="btn small" onClick={() => void window.api.copyText(permCmd).then(() => showToast('ok', t('menuCopied')))}>
-            {t('homeCopy')}
-          </button>
+          <div className="banner-actions">
+            <button className="btn small" onClick={() => void window.api.copyText(permCmd).then(() => showToast('ok', t('menuCopied')))}>
+              {t('homeCopy')}
+            </button>
+            <button className="btn small" onClick={dismissPerm}>
+              {t('homeDismiss')}
+            </button>
+          </div>
         </div>
       )}
 
