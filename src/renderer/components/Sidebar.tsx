@@ -410,7 +410,14 @@ export function Sidebar(): React.JSX.Element {
         {!collapsed && <div className="sidebar-section">{t('proxmox')}</div>}
         <Tree collapsed={collapsed} />
 
-        {!collapsed && <div className="sidebar-section">{t('panels')}</div>}
+        {!collapsed && (
+          <div className="sidebar-section with-action">
+            <span>{t('panels')}</span>
+            <button className="mini" title={t('addPanel')} aria-label={t('addPanel')} onClick={() => openSettings('panels-form')}>
+              <Icon k="ui:plus" size={13} />
+            </button>
+          </div>
+        )}
         <div className="panel-list">
           {listed.length === 0 && !collapsed && <div className="empty">{t('noPanels')}</div>}
           {listed.map((p) => (
