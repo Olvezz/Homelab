@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AiConnection, AiConnectionInput, AiKind, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
+import type { AdguardConfigInput, AdguardConfigView, AiConnection, AiConnectionInput, AiKind, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -739,6 +739,132 @@ function Provisioning(): React.JSX.Element {
   )
 }
 
+function AdguardSettings(): React.JSX.Element {
+  const panels = useStore((s) => s.panels)
+  const showToast = useStore((s) => s.showToast)
+  const [cfg, setCfg] = useState<AdguardConfigView | null>(null)
+  const [url, setUrl] = useState('')
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
+  const [clearPw, setClearPw] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    void window.api.getAdguardConfig().then((c) => {
+      setCfg(c)
+      if (c) {
+        setUrl(c.url)
+        setUser(c.username)
+      } else {
+        // Sugerencia: la dirección de un panel que se llame AdGuard
+        const p = panels.find((x) => /adguard/i.test(x.name) || /adguard/i.test(x.url))
+        if (p) {
+          try {
+            setUrl(new URL(p.url).origin)
+          } catch {
+            // URL ilegible: se deja vacío
+          }
+        }
+      }
+    })
+  }, [])
+
+  const input = (): AdguardConfigInput | null => {
+    if (!/^https?:\/\//i.test(url.trim())) {
+      setError(t('errUrl'))
+      return null
+    }
+    setError('')
+    return { url: url.trim(), username: user.trim(), password: clearPw ? '' : password || undefined }
+  }
+
+  const test = async (): Promise<void> => {
+    const i = input()
+    if (!i) return
+    setBusy(true)
+    setResult(null)
+    try {
+      setResult(await window.api.testAdguard(i))
+    } catch (e) {
+      setResult({ ok: false, message: errMsg(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const save = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    const i = input()
+    if (!i) return
+    try {
+      const saved = await window.api.saveAdguard(i)
+      setCfg(saved)
+      setPassword('')
+      setClearPw(false)
+      setResult(null)
+      showToast('ok', t('adgSaved'))
+    } catch (err) {
+      setError(errMsg(err))
+    }
+  }
+
+  return (
+    <>
+      <h2 id="adguard-section">{t('adgSettingsTitle')}</h2>
+      <p className="hint">{t('adgSettingsHint')}</p>
+      <form id="adguard-form" className="panel-form" onSubmit={(e) => void save(e)}>
+        <label className="field">
+          <span>{t('adgUrl')}</span>
+          <input value={url} placeholder="http://10.0.0.51:3000" spellCheck={false} onChange={(e) => setUrl(e.target.value)} />
+        </label>
+        <div className="row">
+          <label className="field grow">
+            <span>{t('adgUser')}</span>
+            <input value={user} autoComplete="off" onChange={(e) => setUser(e.target.value)} />
+          </label>
+          <label className="field grow">
+            <span>{t('adgPassword')}</span>
+            <input
+              type="password"
+              value={password}
+              autoComplete="off"
+              placeholder={cfg?.hasPassword && !clearPw ? t('aiKeyStored') : ''}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+        </div>
+        {cfg?.hasPassword && (
+          <label className="check">
+            <input type="checkbox" checked={clearPw} onChange={(e) => setClearPw(e.target.checked)} />
+            <span>{t('aiClearKey')}</span>
+          </label>
+        )}
+        {error && <div className="error">{error}</div>}
+        {result && <div className={`test-result ${result.ok ? 't-ok' : 't-error'}`}>{result.message}</div>}
+        <div className="form-actions">
+          {cfg && (
+            <button
+              type="button"
+              className="btn danger"
+              onClick={() => void window.api.clearAdguard().then(() => { setCfg(null); setUrl(''); setUser(''); setPassword(''); setResult(null) })}
+            >
+              {t('adgRemove')}
+            </button>
+          )}
+          <button type="button" className="btn" disabled={busy} onClick={() => void test()}>
+            {busy ? t('aiTesting') : t('aiTest')}
+          </button>
+          <button type="submit" className="btn primary">
+            {t('save')}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+}
+
 function Monitoring(): React.JSX.Element {
   const ui = useStore((s) => s.ui)
   const setUi = useStore((s) => s.setUi)
@@ -978,6 +1104,8 @@ export function Settings(): React.JSX.Element {
       <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
 
       <Monitoring />
+
+      <AdguardSettings />
 
       <Updates />
 

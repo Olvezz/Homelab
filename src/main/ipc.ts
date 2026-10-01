@@ -10,6 +10,7 @@ import {
 } from '../shared/types'
 import { panelsSchema, uiPatchSchema, type ConfigStore } from './config/store'
 import {
+  adguardConfigSchema,
   aiConnectionSchema,
   certDecisionSchema,
   connectionSchema,
@@ -29,6 +30,7 @@ import { buildHostInstaller, DEFAULT_GUEST_SCRIPT, UNINSTALL_COMMAND, validateGu
 import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
+import type { AdguardManager } from './adguard/manager'
 import type { AiManager } from './ai/manager'
 import type { MonitorService } from './pve/monitor'
 import type { SshManager } from './ssh/manager'
@@ -48,10 +50,11 @@ interface Deps {
   ssh: SshManager
   ai: AiManager
   monitor: MonitorService
+  adguard: AdguardManager
   setTerminalFocus: (on: boolean) => void
 }
 
-export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, monitor, setTerminalFocus }: Deps): void {
+export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, monitor, adguard, setTerminalFocus }: Deps): void {
   // Solo la UI propia (frame principal de la ventana) puede hablar con el main; nunca una vista remota
   const handle = (channel: string, fn: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
@@ -140,6 +143,11 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
 
   handle(IPC.panelStatusGet, () => views.statusMap())
   handle(IPC.panelStop, (raw) => views.stop(idSchema.parse(raw)))
+  handle(IPC.adguardGet, () => adguard.service.get())
+  handle(IPC.adguardCfgGet, () => adguard.view())
+  handle(IPC.adguardSave, (raw) => adguard.save(adguardConfigSchema.parse(raw)))
+  handle(IPC.adguardTest, (raw) => adguard.test(adguardConfigSchema.parse(raw)))
+  handle(IPC.adguardClear, () => adguard.clear())
   handle(IPC.monitorGet, (...raw) => {
     const [node, timeframe] = z.tuple([z.string().regex(/^[A-Za-z0-9-]{1,63}$/), z.enum(['hour', 'day', 'week'])]).parse(raw)
     return monitor.get(node, timeframe)

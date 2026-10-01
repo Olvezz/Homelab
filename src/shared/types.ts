@@ -24,6 +24,11 @@ export const IPC = {
   pveApproveExternal: 'pve:approve-external',
   setNativeTheme: 'theme:native',
   monitorGet: 'monitor:get',
+  adguardGet: 'adguard:get',
+  adguardCfgGet: 'adguard:cfg-get',
+  adguardSave: 'adguard:save',
+  adguardTest: 'adguard:test',
+  adguardClear: 'adguard:clear',
   panelStatusGet: 'panel:status-get',
   panelStop: 'panel:stop',
   aiList: 'ai:list',
@@ -203,6 +208,52 @@ export interface UpdateStatus {
   percent?: number
   message?: string
   checkedAt?: number
+}
+
+// ---- AdGuard Home ----
+
+export interface AdguardConfigView {
+  url: string
+  username: string
+  hasPassword: boolean
+}
+
+export interface AdguardConfigInput {
+  url: string
+  username?: string
+  password?: string // undefined = conservar la guardada; '' = borrarla
+}
+
+export interface AdguardClientStat {
+  ip: string
+  name?: string
+  nameSource?: string // AdGuard | Proxmox | ARP | rDNS | DHCP…
+  queries: number
+  blocked: number // bloqueadas en las últimas consultas del registro
+}
+
+export interface AdguardBlockedDomain {
+  domain: string
+  count: number
+  clients: { ip: string; name?: string; count: number }[]
+}
+
+export interface AdguardBlockedEntry {
+  time: number
+  ip: string
+  name?: string
+  domain: string
+  rule?: string
+}
+
+export interface AdguardSnapshot {
+  updatedAt: number
+  status: { running: boolean; protection: boolean; version: string } | null
+  stats: { queries: number; blocked: number; blockedPct: number; avgMs: number; windowHours: number; clients: number } | null
+  topBlocked: AdguardBlockedDomain[]
+  clients: AdguardClientStat[]
+  recent: AdguardBlockedEntry[]
+  errors: Record<string, string> // status | stats | clients | querylog
 }
 
 // ---- Panel de inicio (monitoreo) ----
@@ -498,6 +549,11 @@ export interface Api {
   getPanelStatus(): Promise<Record<string, PanelStatus>>
   stopPanel(panelId: string): Promise<void>
   onPanelStatus(cb: (status: Record<string, PanelStatus>) => void): () => void
+  getAdguard(): Promise<AdguardSnapshot | null>
+  getAdguardConfig(): Promise<AdguardConfigView | null>
+  saveAdguard(input: AdguardConfigInput): Promise<AdguardConfigView>
+  testAdguard(input: AdguardConfigInput): Promise<{ ok: boolean; message: string }>
+  clearAdguard(): Promise<void>
   getMonitor(node: string, timeframe: Timeframe): Promise<MonitorSnapshot>
   listAi(): Promise<AiConnection[]>
   saveAi(input: AiConnectionInput): Promise<AiConnection[]>

@@ -75,3 +75,9 @@ export const aiConnectionSchema = z.object({
   model: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/),
   apiKey: z.string().max(500).optional()
 })
+
+export const adguardConfigSchema = z.object({
+  url: httpUrlSchema,
+  username: z.string().max(100).optional(),
+  password: z.string().max(200).optional()
+})

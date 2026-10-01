@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Guest, LogLine, MonitorSnapshot, TaskInfo, Timeframe } from '../../shared/types'
+import type { AdguardSnapshot, Guest, LogLine, MonitorSnapshot, TaskInfo, Timeframe } from '../../shared/types'
 import { fmtAgo, fmtBytes, fmtClock, fmtPct, fmtRate, fmtUptime, TASK_LABEL } from '../homeFormat'
 import { errMsg, t } from '../i18n'
 import { useStore } from '../store'
+import { AdguardCard } from './AdguardCard'
 import { Meter, Sparkline, TimeChart } from './Charts'
 import { guestIconKey, Icon } from './Icon'
 
@@ -227,6 +228,8 @@ export function Home(): React.JSX.Element {
   const [tf, setTf] = useState<Timeframe>('hour')
   const [nodeName, setNodeName] = useState<string>()
   const [data, setData] = useState<MonitorSnapshot | null>(null)
+  // undefined = cargando; null = AdGuard sin configurar
+  const [adg, setAdg] = useState<AdguardSnapshot | null | undefined>(undefined)
   const [, tick] = useState(0)
 
   const connected = snap.status === 'connected'
@@ -249,6 +252,7 @@ export function Home(): React.JSX.Element {
       try {
         const d = await window.api.getMonitor(node, tf)
         if (alive) setData(d)
+        void window.api.getAdguard().then((a) => alive && setAdg(a)).catch(() => undefined)
       } catch {
         // el siguiente ciclo lo reintenta
       }
@@ -456,6 +460,8 @@ export function Home(): React.JSX.Element {
           </ul>
         </Card>
       </div>
+
+      <AdguardCard snap={adg} />
 
       <div className="cols three">
         <Card title={t('homeServices')}>

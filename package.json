@@ -1,6 +1,6 @@
 {
   "name": "homelab-desktop",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "HomeLab Desktop: Proxmox y paneles de servicios en una sola ventana",
   "main": "./out/main/index.js",
   "author": "Olvezz",

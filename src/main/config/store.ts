@@ -130,6 +130,11 @@ const configSchema = z.object({
   approvedExternal: z.array(z.string()).catch([]),
   // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
   ai: z.array(aiConnSchema).max(20).catch([]), // conexiones con proveedores de IA
+  // AdGuard Home (panel de inicio): dirección y credenciales (la contraseña va cifrada)
+  adguard: z
+    .object({ url: httpUrlSchema, username: z.string().max(100), passwordEnc: z.string().nullable() })
+    .nullable()
+    .catch(null),
   ssh: z.array(sshConnSchema).max(200).catch([]),
   sshHostKeys: z.record(z.string(), z.string()).catch({}),
   // Script que se ejecuta en cada guest nuevo (null = el predeterminado de la app)
@@ -162,7 +167,7 @@ export class ConfigStore {
     const parsed = configSchema.safeParse(raw)
     this.data = parsed.success
       ? parsed.data
-      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ai: [], ssh: [], sshHostKeys: {} }
+      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ai: [], adguard: null, ssh: [], sshHostKeys: {} }
 
     // Al cambiar de versión se guarda una copia del archivo anterior; los datos viven en
     // %APPDATA%, fuera de la carpeta de la app, así que instalar encima no los toca.

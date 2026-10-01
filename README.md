@@ -116,6 +116,7 @@ Barra lateral → **Inicio** (se abre al arrancar; se puede cambiar en Ajustes �
 - **Estado**: servicios de Proxmox caídos, actualizaciones pendientes, salud SMART de los discos y avisos de diagnóstico.
 - **Procesos del host**: Proxmox no publica esa lista por su API; elige en Ajustes una conexión SSH al nodo y la app ejecuta solo un comando de lectura fijo (`ps`, ordenado por CPU). Hace falta la huella del servidor ya confirmada y la contraseña guardada.
 - **Registros**: tareas (con resultado y duración), registro del clúster y syslog, con filtro de texto y de nivel.
+- **AdGuard Home** (opcional): sitios más bloqueados **con qué equipo los pidió**, equipos que más consultan, bloqueos recientes con filtro, consultas/bloqueadas/tiempo medio y estado de la protección. Se configura en Ajustes → *AdGuard Home* con la dirección de su panel web, usuario y contraseña (cifrada); solo lee datos. Los equipos se muestran por **nombre** cuando se conoce, en este orden: el nombre fijo que le pusiste en AdGuard, el del guest de tu Proxmox si la IP es suya (p. ej. `10.0.0.53` → `docker-server`) o de una conexión SSH guardada, y lo que AdGuard averigua solo (DNS inverso, DHCP, ARP). Los demás salen como «sin nombre»; para identificarlos activa en AdGuard el *DNS inverso privado* (con la IP de tu router) o añádelos como clientes.
 
 **Permisos:** con el rol `PVEVMUser` Proxmox no entrega el estado detallado del nodo, los servicios ni los registros (solo lo de los guests). El panel lo detecta, avisa y te da el comando exacto; para ver todo basta añadir solo lectura:
 

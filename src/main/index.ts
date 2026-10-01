@@ -11,6 +11,7 @@ import { PanelHub } from './panelHub'
 import { PveService } from './pve/service'
 import { CertTrust } from './security/certTrust'
 import { AiManager } from './ai/manager'
+import { AdguardManager } from './adguard/manager'
 import { MonitorService } from './pve/monitor'
 import { SshManager } from './ssh/manager'
 import { Updater } from './updater'
@@ -169,6 +170,13 @@ function createWindow(store: ConfigStore): void {
     (id, command) => ssh.exec(id, command),
     () => store.get().ui.monitorSshId || undefined
   )
+  // Nombres para las IP que consultan AdGuard: guests de Proxmox y conexiones SSH guardadas
+  const adguard = new AdguardManager(store, () => {
+    const names = new Map<string, string>()
+    for (const c of ssh.list()) if (/^\d{1,3}(\.\d{1,3}){3}$/.test(c.host)) names.set(c.host, c.name)
+    for (const g of service.getSnapshot().guests) for (const ip of g.ips) names.set(ip, g.name)
+    return names
+  })
   registerIpc({
     win: window,
     store,
@@ -182,6 +190,7 @@ function createWindow(store: ConfigStore): void {
     ssh,
     ai,
     monitor,
+    adguard,
     setTerminalFocus: (on) => {
       terminalActive = on
     }
