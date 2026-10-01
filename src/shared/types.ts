@@ -23,6 +23,7 @@ export const IPC = {
   pveOpenInPve: 'pve:open-in-pve',
   pveApproveExternal: 'pve:approve-external',
   setNativeTheme: 'theme:native',
+  monitorGet: 'monitor:get',
   aiList: 'ai:list',
   aiSave: 'ai:save',
   aiDelete: 'ai:delete',
@@ -96,6 +97,8 @@ export interface UiConfig {
   closeToTray: boolean
   startWithWindows: boolean
   showTemplates: boolean
+  startOnHome: boolean // abrir el panel de inicio al arrancar
+  monitorSshId?: string // conexión SSH al host Proxmox para listar procesos
   aiAllowActions: boolean // el asistente puede proponer acciones (siempre con aprobación)
   lastAiId?: string
   autoUpdate: boolean // comprobar y descargar actualizaciones en segundo plano
@@ -132,6 +135,12 @@ export interface Guest {
   description: string
   osType?: string // `ostype` de la config de Proxmox (ubuntu, debian, l26, win11…)
   osId?: string // sistema que informa el qemu-guest-agent (ubuntu, debian, mswindows…)
+  disk: number // uso de disco (bytes; en LXC es el rootfs)
+  maxdisk: number
+  netInRate: number // bytes/s calculados entre dos sondeos
+  netOutRate: number
+  diskReadRate: number
+  diskWriteRate: number
   ips: string[]
   panels: Panel[]
   busy?: PowerAction // acción en curso
@@ -144,6 +153,9 @@ export interface NodeInfo {
   maxcpu: number
   mem: number
   maxmem: number
+  uptime: number
+  disk: number
+  maxdisk: number
 }
 
 export type PveStatus =
@@ -188,6 +200,107 @@ export interface UpdateStatus {
   percent?: number
   message?: string
   checkedAt?: number
+}
+
+// ---- Panel de inicio (monitoreo) ----
+
+export type Timeframe = 'hour' | 'day' | 'week'
+
+export interface MonitorNodeInfo {
+  uptime: number // segundos
+  cpu: number // 0..1
+  ioWait: number // 0..1
+  load: [number, number, number]
+  mem: { used: number; total: number }
+  swap: { used: number; total: number }
+  rootfs: { used: number; total: number }
+  cpuModel?: string
+  cores?: number
+  sockets?: number
+  kernel?: string
+  pveVersion?: string
+}
+
+export interface RrdPoint {
+  t: number // epoch (s)
+  cpu?: number
+  ioWait?: number
+  load?: number
+  memUsed?: number
+  memTotal?: number
+  netIn?: number // bytes/s
+  netOut?: number
+}
+
+export interface StorageInfo {
+  id: string
+  type: string
+  used: number
+  total: number
+  active: boolean
+  shared: boolean
+  content: string
+}
+
+export type LogLevel = 'info' | 'warn' | 'error'
+
+export interface LogLine {
+  time?: number
+  source: string
+  text: string
+  level: LogLevel
+}
+
+export interface TaskInfo {
+  upid: string
+  type: string
+  id?: string
+  user: string
+  start: number
+  end?: number
+  state: 'running' | 'ok' | 'warn' | 'error'
+  status: string
+}
+
+export interface ServiceInfo {
+  name: string
+  description: string
+  running: boolean
+}
+
+export interface DiskInfo {
+  dev: string
+  model: string
+  size: number
+  type: string
+  health: string
+}
+
+export interface ProcessInfo {
+  pid: number
+  user: string
+  cpu: number
+  mem: number
+  elapsed: string
+  command: string
+}
+
+export interface MonitorSnapshot {
+  node: string
+  timeframe: Timeframe
+  updatedAt: number
+  status: MonitorNodeInfo | null
+  history: RrdPoint[]
+  storage: StorageInfo[]
+  tasks: TaskInfo[]
+  clusterLog: LogLine[]
+  syslog: LogLine[]
+  services: ServiceInfo[]
+  updates: { count: number; packages: string[] } | null
+  disks: DiskInfo[]
+  processes: ProcessInfo[]
+  // sección -> motivo por el que no se pudo leer ('no-configurado' = falta la conexión SSH)
+  errors: Record<string, string>
 }
 
 export type AiKind = 'anthropic' | 'gemini' | 'openai' | 'ollama'
@@ -370,6 +483,7 @@ export interface Api {
   onPanels(cb: (panels: Panel[]) => void): () => void
   onSnapshot(cb: (snapshot: PveSnapshot) => void): () => void
   setNativeTheme(mode: 'dark' | 'light'): Promise<void>
+  getMonitor(node: string, timeframe: Timeframe): Promise<MonitorSnapshot>
   listAi(): Promise<AiConnection[]>
   saveAi(input: AiConnectionInput): Promise<AiConnection[]>
   deleteAi(id: string): Promise<AiConnection[]>

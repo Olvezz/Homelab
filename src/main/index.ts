@@ -11,6 +11,7 @@ import { PanelHub } from './panelHub'
 import { PveService } from './pve/service'
 import { CertTrust } from './security/certTrust'
 import { AiManager } from './ai/manager'
+import { MonitorService } from './pve/monitor'
 import { SshManager } from './ssh/manager'
 import { Updater } from './updater'
 import { ViewManager } from './viewManager'
@@ -162,6 +163,11 @@ function createWindow(store: ConfigStore): void {
     },
     IPC.aiEvent
   )
+  const monitor = new MonitorService(
+    () => service.getClient(),
+    (id, command) => ssh.exec(id, command),
+    () => store.get().ui.monitorSshId || undefined
+  )
   registerIpc({
     win: window,
     store,
@@ -174,6 +180,7 @@ function createWindow(store: ConfigStore): void {
     updater,
     ssh,
     ai,
+    monitor,
     setTerminalFocus: (on) => {
       terminalActive = on
     }

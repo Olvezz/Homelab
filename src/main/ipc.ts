@@ -30,6 +30,7 @@ import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
 import type { AiManager } from './ai/manager'
+import type { MonitorService } from './pve/monitor'
 import type { SshManager } from './ssh/manager'
 import type { Updater } from './updater'
 import type { ViewManager } from './viewManager'
@@ -46,10 +47,11 @@ interface Deps {
   updater: Updater
   ssh: SshManager
   ai: AiManager
+  monitor: MonitorService
   setTerminalFocus: (on: boolean) => void
 }
 
-export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, setTerminalFocus }: Deps): void {
+export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, monitor, setTerminalFocus }: Deps): void {
   // Solo la UI propia (frame principal de la ventana) puede hablar con el main; nunca una vista remota
   const handle = (channel: string, fn: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
@@ -134,6 +136,11 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
 
   handle(IPC.copyText, (raw) => {
     clipboard.writeText(z.string().max(200000).parse(raw))
+  })
+
+  handle(IPC.monitorGet, (...raw) => {
+    const [node, timeframe] = z.tuple([z.string().regex(/^[A-Za-z0-9-]{1,63}$/), z.enum(['hour', 'day', 'week'])]).parse(raw)
+    return monitor.get(node, timeframe)
   })
 
   // ---- Asistente de IA ----

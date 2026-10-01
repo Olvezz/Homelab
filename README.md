@@ -105,6 +105,25 @@ Qué instala: un temporizador de systemd (`homelab-provision.timer`, cada minuto
 
 La app nunca ejecuta nada en el nodo por su cuenta: solo genera el comando que tú pegas. Para las VM, lo ideal es llevar qemu-guest-agent ya en tu plantilla y activar *Options → QEMU Guest Agent*.
 
+## Panel de inicio (monitoreo)
+
+Barra lateral → **Inicio** (se abre al arrancar; se puede cambiar en Ajustes → *Inicio y monitoreo*). Es como el *Summary* del datacenter de Proxmox pero con más datos y refresco cada 10 s mientras está abierto:
+
+- **Tarjetas** con minigráfica: tiempo activo, CPU, memoria, carga (1/5/15 min), disco del sistema, red y guests.
+- **Gráficas** de CPU (con espera de E/S), memoria, tráfico de red y carga, con periodo de **1 h / 24 h / 7 d**, cruz con tooltip y vista de tabla.
+- **Guests: mayores consumidores** (CPU, RAM, red y E/S de disco por guest, ordenable) y **almacenamiento** con medidores (aviso a partir del 80 %, crítico desde el 90 %, con icono y texto).
+- **Estado**: servicios de Proxmox caídos, actualizaciones pendientes, salud SMART de los discos y avisos de diagnóstico.
+- **Procesos del host**: Proxmox no publica esa lista por su API; elige en Ajustes una conexión SSH al nodo y la app ejecuta solo un comando de lectura fijo (`ps`, ordenado por CPU). Hace falta la huella del servidor ya confirmada y la contraseña guardada.
+- **Registros**: tareas (con resultado y duración), registro del clúster y syslog, con filtro de texto y de nivel.
+
+**Permisos:** con el rol `PVEVMUser` Proxmox no entrega el estado detallado del nodo, los servicios ni los registros (solo lo de los guests). El panel lo detecta, avisa y te da el comando exacto; para ver todo basta añadir solo lectura:
+
+```
+pveum acl modify / --users olvezz@pve --roles PVEAuditor
+```
+
+El syslog además exige el permiso `Sys.Syslog` (lo trae `PVEAdmin`, no `PVEAuditor`): si no lo tiene, esa pestaña lo indica y el resto funciona igual.
+
 ## Asistente de IA
 
 Barra lateral → *IA → Asistente* (o clic derecho en un guest → *Preguntar a la IA*). Un chat que conoce tu homelab: le preguntas por el estado de tus guests y puede **proponer acciones** (iniciar/apagar/reiniciar un guest, ejecutar un comando por SSH).

@@ -74,6 +74,9 @@ export class PveService {
   private nodes: ParsedNode[] = []
   private guests: ParsedGuest[] = []
   private details = new Map<string, Detail>()
+  // Muestras anteriores de los contadores de red/disco para calcular tasas (bytes/s) entre sondeos
+  private rateBase = new Map<string, { t: number; netin: number; netout: number; dr: number; dw: number }>()
+  private rates = new Map<string, { netInRate: number; netOutRate: number; diskReadRate: number; diskWriteRate: number }>()
   private busy = new Map<string, PowerAction>()
   private canPower = true
   private updatedAt: number | null = null
@@ -142,6 +145,10 @@ export class PveService {
     if (!this.cfg) return null
     const { host, port, tokenId, fingerprint, pollIntervalSec } = this.cfg
     return { host, port, tokenId, fingerprint, pollIntervalSec, secretStored: !!this.cfg.tokenSecretEnc }
+  }
+
+  getClient(): PveClient | null {
+    return this.client
   }
 
   getSnapshot(): PveSnapshot {
@@ -264,6 +271,7 @@ export class PveService {
       const parsed = parseResources(raw)
       this.guests = parsed.guests
       this.nodes = parsed.nodes
+      this.updateRates()
       await this.refreshDetails(this.client)
       this.failures = 0
       this.updatedAt = Date.now()
@@ -277,6 +285,34 @@ export class PveService {
         void this.poll()
       } else {
         this.schedule()
+      }
+    }
+  }
+
+  private updateRates(): void {
+    const now = Date.now()
+    const live = new Set<string>()
+    for (const g of this.guests) {
+      const key = guestKey(g.node, g.vmid)
+      live.add(key)
+      const prev = this.rateBase.get(key)
+      if (prev && now > prev.t) {
+        const dt = (now - prev.t) / 1000
+        // Un contador que baja (el guest se reinició) cuenta como 0, no como una tasa negativa
+        const rate = (cur: number, before: number): number => (cur >= before ? (cur - before) / dt : 0)
+        this.rates.set(key, {
+          netInRate: rate(g.netin, prev.netin),
+          netOutRate: rate(g.netout, prev.netout),
+          diskReadRate: rate(g.diskread, prev.dr),
+          diskWriteRate: rate(g.diskwrite, prev.dw)
+        })
+      }
+      this.rateBase.set(key, { t: now, netin: g.netin, netout: g.netout, dr: g.diskread, dw: g.diskwrite })
+    }
+    for (const key of [...this.rateBase.keys()]) {
+      if (!live.has(key)) {
+        this.rateBase.delete(key)
+        this.rates.delete(key)
       }
     }
   }
@@ -462,6 +498,9 @@ export class PveService {
         mem: g.mem,
         maxmem: g.maxmem,
         uptime: g.uptime,
+        disk: g.disk,
+        maxdisk: g.maxdisk,
+        ...(this.rates.get(key) ?? { netInRate: 0, netOutRate: 0, diskReadRate: 0, diskWriteRate: 0 }),
         tags,
         description,
         osType: d?.osType,

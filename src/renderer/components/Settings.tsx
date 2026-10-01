@@ -739,6 +739,31 @@ function Provisioning(): React.JSX.Element {
   )
 }
 
+function Monitoring(): React.JSX.Element {
+  const ui = useStore((s) => s.ui)
+  const setUi = useStore((s) => s.setUi)
+  const connections = useStore((s) => s.sshConnections)
+  return (
+    <>
+      <h2 id="monitor-section">{t('monitorTitle')}</h2>
+      <p className="hint">{t('monitorHint')}</p>
+      <Toggle checked={ui.startOnHome} label={t('monitorStartHome')} onChange={(v) => setUi({ startOnHome: v })} />
+      <label className="field">
+        <span>{t('monitorSsh')}</span>
+        <select value={ui.monitorSshId ?? ''} onChange={(e) => setUi({ monitorSshId: e.target.value })}>
+          <option value="">{t('monitorSshNone')}</option>
+          {connections.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} ({c.username}@{c.host})
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">{t('monitorSshHint')}</p>
+    </>
+  )
+}
+
 function Updates(): React.JSX.Element {
   const update = useStore((s) => s.update)
   const autoUpdate = useStore((s) => s.ui.autoUpdate)
@@ -951,6 +976,8 @@ export function Settings(): React.JSX.Element {
       <Toggle checked={ui.closeToTray} label={t('closeToTray')} onChange={(v) => setUi({ closeToTray: v })} />
       <Toggle checked={ui.startWithWindows} label={t('startWithWindows')} onChange={(v) => setUi({ startWithWindows: v })} />
       <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
+
+      <Monitoring />
 
       <Updates />
 

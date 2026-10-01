@@ -24,7 +24,7 @@ describe('parseResources', () => {
     expect(guests.map((g) => g.vmid)).toEqual([100, 102, 103])
     expect(guests[0]).toMatchObject({ type: 'lxc', status: 'running', tags: ['dns', 'web-3000'], template: false })
     expect(guests[2]).toMatchObject({ template: true, status: 'stopped', cpu: 0 })
-    expect(nodes).toEqual([{ name: 'proxmox', online: true, cpu: 0.1, maxcpu: 4, mem: 1, maxmem: 8 }])
+    expect(nodes).toEqual([{ name: 'proxmox', online: true, cpu: 0.1, maxcpu: 4, mem: 1, maxmem: 8, uptime: 0, disk: 0, maxdisk: 0 }])
   })
   it('tolera respuestas que no son una lista', () => {
     expect(parseResources({ data: 1 })).toEqual({ guests: [], nodes: [] })

@@ -29,6 +29,8 @@ export const uiPatchSchema = z
     closeToTray: z.boolean(),
     startWithWindows: z.boolean(),
     showTemplates: z.boolean(),
+    startOnHome: z.boolean(),
+    monitorSshId: z.string().regex(/^ssh-[a-z0-9-]{1,40}$/).or(z.literal('')),
     aiAllowActions: z.boolean(),
     lastAiId: z.string().regex(/^ai-[a-z0-9-]{1,40}$/),
     autoUpdate: z.boolean(),
@@ -43,6 +45,7 @@ const defaultUi: UiConfig = {
   closeToTray: true,
   startWithWindows: false,
   showTemplates: false,
+  startOnHome: true,
   aiAllowActions: true,
   autoUpdate: true
 }
@@ -112,6 +115,8 @@ const configSchema = z.object({
       closeToTray: z.boolean().catch(defaultUi.closeToTray),
       startWithWindows: z.boolean().catch(defaultUi.startWithWindows),
       showTemplates: z.boolean().catch(defaultUi.showTemplates),
+      startOnHome: z.boolean().catch(defaultUi.startOnHome),
+      monitorSshId: z.string().optional().catch(undefined),
       aiAllowActions: z.boolean().catch(defaultUi.aiAllowActions),
       lastAiId: z.string().optional().catch(undefined),
       autoUpdate: z.boolean().catch(defaultUi.autoUpdate),

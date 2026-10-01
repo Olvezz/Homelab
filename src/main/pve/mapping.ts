@@ -17,7 +17,13 @@ const resourceSchema = z.object({
   mem: num,
   maxmem: num,
   uptime: num,
-  tags: z.string().optional()
+  tags: z.string().optional(),
+  netin: num,
+  netout: num,
+  diskread: num,
+  diskwrite: num,
+  disk: num,
+  maxdisk: num
 })
 
 export interface ParsedGuest {
@@ -33,6 +39,12 @@ export interface ParsedGuest {
   maxmem: number
   uptime: number
   tags: string[]
+  netin: number
+  netout: number
+  diskread: number
+  diskwrite: number
+  disk: number
+  maxdisk: number
 }
 
 export interface ParsedNode {
@@ -42,6 +54,9 @@ export interface ParsedNode {
   maxcpu: number
   mem: number
   maxmem: number
+  uptime: number
+  disk: number
+  maxdisk: number
 }
 
 export function parseTags(raw: string | undefined): string[] {
@@ -78,7 +93,13 @@ export function parseResources(raw: unknown): { guests: ParsedGuest[]; nodes: Pa
         mem: v.mem,
         maxmem: v.maxmem,
         uptime: v.uptime,
-        tags: parseTags(v.tags)
+        tags: parseTags(v.tags),
+        netin: v.netin,
+        netout: v.netout,
+        diskread: v.diskread,
+        diskwrite: v.diskwrite,
+        disk: v.disk,
+        maxdisk: v.maxdisk
       })
     } else if (v.type === 'node') {
       nodes.push({
@@ -87,7 +108,10 @@ export function parseResources(raw: unknown): { guests: ParsedGuest[]; nodes: Pa
         cpu: v.cpu,
         maxcpu: v.maxcpu,
         mem: v.mem,
-        maxmem: v.maxmem
+        maxmem: v.maxmem,
+        uptime: v.uptime,
+        disk: v.disk,
+        maxdisk: v.maxdisk
       })
     }
   }

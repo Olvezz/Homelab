@@ -38,7 +38,7 @@ export interface ChatItem {
 
 export type ItemKind = 'panel' | 'ssh' | 'session'
 
-export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'ai'
+export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'ai' | 'home'
 
 export interface ConfirmState {
   title: string
@@ -82,6 +82,7 @@ interface State {
 
   init: () => Promise<void>
   selectPanel: (id: string) => void
+  openHome: () => void
   openSettings: (anchor?: string) => void
   closeSettings: () => void
   openWizard: () => void
@@ -139,6 +140,7 @@ const defaultUi: UiConfig = {
   closeToTray: true,
   startWithWindows: false,
   showTemplates: false,
+  startOnHome: true,
   aiAllowActions: true,
   autoUpdate: true
 }
@@ -199,7 +201,7 @@ export const useStore = create<State>((set, get) => ({
     wantedId = ui.lastActiveId
     const activeId = panels.find((p) => p.id === ui.lastActiveId)?.id ?? listedPanels(panels)[0]?.id ?? null
     // Sin conexión configurada se abre el asistente (se puede omitir)
-    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : 'view'
+    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : ui.startOnHome ? 'home' : 'view'
     set({ ready: true, panels, ui, pve, snapshot, themeCookie, activeId, page })
 
     if (!listening) {
@@ -266,6 +268,10 @@ export const useStore = create<State>((set, get) => ({
     void window.api.showView(id)
   },
 
+  openHome: () => {
+    set({ page: 'home', menu: null, itemMenu: null, searchOpen: false })
+    void window.api.showView(null)
+  },
   openSettings: (anchor) => {
     // onClick={openSettings} pasa el evento como primer argumento: solo vale un texto
     set({ page: 'settings', settingsAnchor: typeof anchor === 'string' ? anchor : null })

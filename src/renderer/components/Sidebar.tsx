@@ -257,6 +257,23 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
   )
 }
 
+function HomeEntry({ collapsed }: { collapsed: boolean }): React.JSX.Element {
+  const page = useStore((s) => s.page)
+  const openHome = useStore((s) => s.openHome)
+  return (
+    <div className="panel-list">
+      <div className={`panel-row${page === 'home' ? ' active' : ''}`}>
+        <button className="panel-item" title={t('homeTitle')} onClick={openHome}>
+          <span className="panel-icon">
+            <Icon k="ui:home" />
+          </span>
+          {!collapsed && <span className="panel-name">{t('homeTitle')}</span>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AiSection({ collapsed }: { collapsed: boolean }): React.JSX.Element {
   const page = useStore((s) => s.page)
   const openAi = useStore((s) => s.openAi)
@@ -388,6 +405,8 @@ export function Sidebar(): React.JSX.Element {
       </div>
 
       <div className="sidebar-scroll">
+        <HomeEntry collapsed={collapsed} />
+
         {!collapsed && <div className="sidebar-section">{t('proxmox')}</div>}
         <Tree collapsed={collapsed} />
 

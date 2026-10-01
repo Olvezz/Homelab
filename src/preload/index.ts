@@ -29,6 +29,7 @@ const api: Api = {
   pveApproveExternal: (url) => ipcRenderer.invoke(IPC.pveApproveExternal, url),
   setNativeTheme: (mode) => ipcRenderer.invoke(IPC.setNativeTheme, mode),
   onThemeCookie: (cb) => on(IPC.themeCookie, cb),
+  getMonitor: (node, timeframe) => ipcRenderer.invoke(IPC.monitorGet, node, timeframe),
   listAi: () => ipcRenderer.invoke(IPC.aiList),
   saveAi: (input) => ipcRenderer.invoke(IPC.aiSave, input),
   deleteAi: (id) => ipcRenderer.invoke(IPC.aiDelete, id),

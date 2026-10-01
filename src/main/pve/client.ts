@@ -19,6 +19,7 @@ export class HttpError extends Error {
 }
 
 const TIMEOUT_MS = 8000
+const MONITOR_PATH = /^\/(nodes\/[A-Za-z0-9-]{1,63}\/(status|rrddata|storage|tasks|syslog|services|apt\/update|disks\/list)|cluster\/log)(\?[A-Za-z0-9=&._-]{0,80})?$/
 
 function connect(
   host: string,
@@ -141,6 +142,11 @@ export class PveClient {
     }).finally(() => socket.destroy())
   }
 
+  // Lecturas del panel de inicio: solo rutas de una lista cerrada (nada construido a partir de texto libre)
+  getMonitor(path: string): Promise<unknown> {
+    if (!MONITOR_PATH.test(path)) throw new Error('Ruta no permitida')
+    return this.request('GET', path)
+  }
   version(): Promise<{ version: string }> {
     return this.request('GET', '/version')
   }
