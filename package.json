@@ -1,0 +1,45 @@
+{
+  "name": "homelab-desktop",
+  "version": "0.2.1",
+  "description": "HomeLab Desktop: Proxmox y paneles de servicios en una sola ventana",
+  "main": "./out/main/index.js",
+  "author": "Olvezz",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "themes": "node scripts/sync-themes.mjs",
+    "icons": "node scripts/build-icons.mjs",
+    "release": "npm run build && electron-builder --win --publish always",
+    "format": "prettier --write .",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.0.0",
+    "lucide-react": "^1.49.0",
+    "prettier": "^3.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "simple-icons": "^16.33.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.3"
+  }
+}

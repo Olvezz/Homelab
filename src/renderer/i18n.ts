@@ -1,0 +1,199 @@
+// i18n simple: hoy solo español; para añadir inglés basta otro diccionario con las mismas claves.
+const es = {
+  appName: 'HomeLab',
+  panels: 'Paneles',
+  consoles: 'Pestañas',
+  settings: 'Ajustes',
+  noPanels: 'No hay paneles. Añade uno en Ajustes.',
+  selectPanel: 'Selecciona un panel de la barra lateral',
+  back: 'Atrás',
+  forward: 'Adelante',
+  reload: 'Recargar',
+  openExternal: 'Abrir en el navegador',
+  copyUrl: 'Copiar URL',
+  zoomIn: 'Acercar',
+  zoomOut: 'Alejar',
+  collapseSidebar: 'Colapsar barra lateral (Ctrl+B)',
+  expandSidebar: 'Expandir barra lateral (Ctrl+B)',
+  search: 'Buscar (Ctrl+K)',
+  closeTab: 'Cerrar pestaña',
+  settingsTitle: 'Ajustes',
+  close: 'Cerrar',
+  appearance: 'Apariencia',
+  theme: 'Tema',
+  themeFollowProxmox: 'Seguir a Proxmox (recomendado)',
+  themeGroupDark: 'ProxMorph · oscuros',
+  themeGroupLight: 'ProxMorph · claros',
+  themeLight: 'Claro básico',
+  themeSystem: 'Del sistema (oscuro/claro)',
+  themeFollowHint:
+    'Usando «{name}». Cambia el tema desde la propia web de Proxmox (menú de usuario → Color Theme, en el panel Proxmox) y la app lo adopta sola. Tema guardado en Proxmox: {cookie}.',
+  themeNoCookie: 'ninguno todavía',
+  themeFixedHint: 'Tema fijo: la app ya no sigue al de Proxmox. Los temas son los de ProxMorph (npm run themes los actualiza).',
+  general: 'General',
+  closeToTray: 'Al cerrar la ventana, mantener la app en la bandeja',
+  startWithWindows: 'Iniciar con Windows (minimizada en la bandeja)',
+  showTemplates: 'Mostrar plantillas de Proxmox en el árbol',
+  manualPanels: 'Paneles manuales',
+  manualPanelsHint:
+    'Servicios que abres dentro de la app: Proxmox, Portainer, router, NAS… Cada uno guarda su propia sesión. El icono se asigna solo (Ubuntu, Portainer, AdGuard…); puedes forzar otro al editar. Los paneles de VMs/LXC se descubren solos desde sus notas.',
+  addPanel: 'Añadir panel',
+  editPanel: 'Editar panel',
+  name: 'Nombre',
+  url: 'URL',
+  icon: 'Icono',
+  iconAuto: 'Automático (según el nombre y la URL)',
+  save: 'Guardar',
+  cancel: 'Cancelar',
+  edit: 'Editar',
+  remove: 'Eliminar',
+  confirmRemove: '¿Eliminar este panel? Su sesión guardada se conserva en disco.',
+  errName: 'El nombre es obligatorio',
+  errUrl: 'URL no válida: usa http:// o https://',
+  certTitle: 'Certificado no reconocido',
+  certChangedTitle: '¡El certificado cambió!',
+  certBody:
+    'El servidor {host} usa un certificado que no está firmado por una entidad conocida (¿autofirmado?). Comprueba que la huella SHA-256 coincide con la de tu servidor antes de confiar.',
+  certChangedBody:
+    'El servidor {host} presenta un certificado distinto al que aceptaste antes. Si no lo has regenerado tú, podría ser una suplantación.',
+  certFingerprint: 'Huella SHA-256',
+  certPrevious: 'Huella anterior',
+  certTrust: 'Confiar y recargar',
+  certReject: 'No confiar',
+  loading: 'Cargando…',
+
+  // Proxmox: árbol y estado
+  proxmox: 'Proxmox',
+  nodeLabel: 'Nodo {name}',
+  statusUnconfigured: 'Proxmox sin configurar',
+  statusNeedsSecret: 'Falta el secreto del token',
+  statusConnecting: 'Conectando…',
+  statusConnected: 'Conectado',
+  statusOffline: 'Sin conexión (¿Tailscale activo?)',
+  statusUnauthorized: 'Token inválido (401)',
+  statusCertChanged: 'El certificado cambió',
+  statusError: 'Error de Proxmox',
+  statusHint: 'Pulsa para configurar la conexión',
+  connectCta: 'Conectar con Proxmox',
+  connectCtaHint: 'Configura el token para ver tus VMs y LXC aquí.',
+  template: 'plantilla',
+  guestVm: 'VM',
+  guestCt: 'CT',
+  noGuests: 'Sin VMs ni LXC',
+
+  // Menú contextual y confirmaciones
+  actStart: 'Iniciar',
+  actShutdown: 'Apagar',
+  actReboot: 'Reiniciar',
+  actStop: 'Forzar apagado',
+  actConsole: 'Abrir consola',
+  actOpenInPve: 'Abrir en Proxmox',
+  actCopyIp: 'Copiar IP',
+  actRefresh: 'Refrescar',
+  noPowerPermission: 'El token no tiene permiso de energía',
+  confirmTitle: '¿{action} {guest}?',
+  confirmShutdown: 'Se enviará una orden de apagado limpio al invitado.',
+  confirmReboot: 'El invitado se reiniciará.',
+  confirmStop: 'Se cortará la alimentación sin apagar el sistema: puedes perder datos.',
+  confirmForgetTitle: '¿Olvidar la conexión con Proxmox?',
+  confirmForget: 'Se borra el token guardado. Los paneles manuales y sus sesiones se conservan.',
+  copied: 'IP copiada: {ip}',
+  noIp: 'Este invitado no tiene IP detectada',
+  consoleNeedsLogin: 'La consola usa la sesión web de Proxmox: inicia sesión en el panel Proxmox si te lo pide.',
+
+  // Búsqueda
+  searchPlaceholder: 'Buscar por nombre, vmid, IP o panel…',
+  searchNone: 'Sin resultados',
+  searchPanel: 'Panel',
+  searchGuest: 'Invitado',
+
+  // Asistente
+  wizardTitle: 'Conectar con Proxmox',
+  wizardStep: 'Paso {n} de 3',
+  wizardHost: 'Host o IP',
+  wizardPort: 'Puerto',
+  wizardProbe: 'Obtener certificado',
+  wizardSkip: 'Omitir por ahora',
+  wizardCertTitle: 'Confirma el certificado',
+  wizardCertBody:
+    'Proxmox usa un certificado autofirmado. Compara esta huella con la que muestra tu servidor (Datacenter → nodo → Sistema → Certificados). Solo se aceptará exactamente este certificado.',
+  wizardCertChanged:
+    'La huella es distinta a la guardada antes. Si no regeneraste el certificado de Proxmox, no continúes.',
+  wizardCertSubject: 'Sujeto',
+  wizardTrust: 'Confiar y continuar',
+  wizardBack: 'Atrás',
+  wizardTokenTitle: 'Token de la API',
+  wizardTokenId: 'Token ID',
+  wizardTokenSecret: 'Secreto',
+  wizardInterval: 'Intervalo de actualización',
+  wizardHowTo: 'Cómo crear el usuario y el token',
+  wizardHowToBody:
+    'En el shell del nodo Proxmox (usuario dedicado, nunca root@pam). Para solo lectura usa PVEAuditor en lugar de PVEVMUser:',
+  wizardTest: 'Probar conexión',
+  wizardTestOk: 'Conexión correcta: Proxmox VE {version}',
+  wizardSave: 'Guardar y cargar el árbol',
+  wizardSecretNote: 'El secreto se cifra con Windows (DPAPI) y nunca se guarda en archivos en claro.',
+  errTokenId: 'Formato esperado: usuario@pve!nombre',
+  errSecret: 'El secreto es un UUID, sin espacios',
+  errHost: 'Host no válido',
+
+  // Ajustes: conexión y diagnóstico
+  connection: 'Conexión con Proxmox',
+  connectionNone: 'No hay ninguna conexión configurada.',
+  connectionConfigure: 'Configurar conexión',
+  connectionReconfigure: 'Editar o re-confiar certificado',
+  connectionForget: 'Olvidar',
+  connectionRefresh: 'Refrescar ahora',
+  secretNotStored: 'Secreto no guardado: se pide en cada arranque',
+  aboutBuild:
+    'HomeLab Desktop v{version} · compilado el {date}. La app no se actualiza sola: tras instalar una versión nueva, comprueba aquí que el número y la fecha cambiaron.',
+  provision: 'Arranque de guests nuevos',
+  provisionIntro:
+    'Cada VM o LXC NUEVO se actualiza y recibe los paquetes base solo, sin que lo hagas a mano. Se instala una sola vez en el nodo: un temporizador revisa cada minuto si hay guests nuevos y les ejecuta el script de abajo. Los que ya tienes no se tocan.',
+  provisionStep1: '1. Revisa o edita el script (se ejecuta como root dentro de cada guest nuevo).',
+  provisionStep2: '2. «Abrir shell del nodo y pegar»: la app abre el shell de Proxmox y pega el instalador (inicia sesión como root@pam si te lo pide).',
+  provisionStep3: '3. Revisa lo pegado y pulsa Enter. Listo: no hay que repetirlo. Si cambias el script aquí, vuelve a pegar el instalador para actualizarlo.',
+  provisionScriptLabel: 'Script que se ejecuta dentro de cada guest nuevo',
+  provisionSave: 'Guardar script',
+  provisionRestore: 'Restaurar el predeterminado',
+  provisionOpenShell: 'Abrir shell del nodo y pegar',
+  provisionCopy: 'Copiar comando de instalación',
+  provisionCopyUninstall: 'Copiar comando para quitarlo',
+  provisionSaved: 'Script guardado. Vuelve a pegar el instalador en el nodo para aplicarlo.',
+  provisionCopied: 'Comando copiado al portapapeles',
+  provisionPasteHint: 'El instalador ya está en el portapapeles. Si el shell no lo recibe, pulsa Ctrl+V dentro de él.',
+  provisionNotes:
+    'Las VM necesitan qemu-guest-agent activo para poder prepararse: lo ideal es llevarlo ya en tu plantilla (ubuntu-base) y activar Options → QEMU Guest Agent. Registros en el nodo: /var/log/homelab-provision/.',
+  updates: 'Actualizaciones',
+  autoUpdate: 'Buscar y descargar actualizaciones automáticamente',
+  updateCheck: 'Buscar ahora',
+  updateInstall: 'Reiniciar e instalar',
+  updateDisabled: 'Solo disponible en la versión instalada (no en modo desarrollo).',
+  updateIdle: 'Sin comprobar todavía en esta sesión.',
+  updateChecking: 'Buscando actualizaciones…',
+  updateNone: 'Tienes la última versión.',
+  updateDownloading: 'Descargando la versión {version}… {percent}%',
+  updateReady: 'La versión {version} está lista. Reinicia para instalarla; tus paneles, ajustes y sesiones se conservan.',
+  updateReadyToast: 'Actualización {version} lista: reinicia para instalarla',
+  updateBanner: 'Versión {version} lista',
+  updateDataSafe: 'Tus datos (conexión, paneles, ajustes y sesiones) viven en %APPDATA%\\homelab-desktop y no se tocan al actualizar; antes de cambiar de versión se guarda una copia (config.backup-v….json).',
+  diagnostics: 'Diagnóstico',
+  diagnosticsNone: 'Sin avisos.',
+  diagnosticsApprove: 'Aprobar',
+  diagnosticsHint:
+    'Convención en las notas de cada VM/LXC: una línea `panel: Nombre | http://ip:puerto` (el icono se asigna solo). También sirve un tag web-<puerto> (o web-<puerto>-https).'
+} as const
+
+export type Key = keyof typeof es
+
+export function t(key: Key, vars?: Record<string, string | number>): string {
+  let text: string = es[key]
+  for (const [k, v] of Object.entries(vars ?? {})) text = text.replace(`{${k}}`, String(v))
+  return text
+}
+
+// Los errores de invoke llegan como "Error invoking remote method 'x': Error: mensaje"
+export function errMsg(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  return raw.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+}

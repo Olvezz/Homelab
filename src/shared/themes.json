@@ -1,0 +1,386 @@
+[
+  {
+    "id": "blue-slate",
+    "name": "Blue Slate",
+    "dark": true,
+    "colors": {
+      "bg": "#0f172a",
+      "text": "#cbd5e1",
+      "accent": "#3b82f6",
+      "track": "#334155",
+      "warn": "#f59e0b",
+      "crit": "#ef4444",
+      "primary": "#10b981",
+      "grid": "#475569",
+      "success": "#10b981"
+    }
+  },
+  {
+    "id": "catppuccin-frappe",
+    "name": "Catppuccin Frappe",
+    "dark": true,
+    "colors": {
+      "bg": "#303446",
+      "text": "#c6d0f5",
+      "accent": "#ca9ee6",
+      "track": "#51576d",
+      "warn": "#e5c890",
+      "crit": "#e78284",
+      "primary": "#ca9ee6",
+      "grid": "#51576d",
+      "success": "#a6d189"
+    }
+  },
+  {
+    "id": "catppuccin-latte",
+    "name": "Catppuccin Latte",
+    "dark": false,
+    "colors": {
+      "bg": "#eff1f5",
+      "text": "#4c4f69",
+      "accent": "#8839ef",
+      "track": "#bcc0cc",
+      "warn": "#df8e1d",
+      "crit": "#d20f39",
+      "primary": "#8839ef",
+      "grid": "#bcc0cc",
+      "success": "#40a02b"
+    }
+  },
+  {
+    "id": "catppuccin-macchiato",
+    "name": "Catppuccin Macchiato",
+    "dark": true,
+    "colors": {
+      "bg": "#24273a",
+      "text": "#cad3f5",
+      "accent": "#c6a0f6",
+      "track": "#494d64",
+      "warn": "#eed49f",
+      "crit": "#ed8796",
+      "primary": "#c6a0f6",
+      "grid": "#494d64",
+      "success": "#a6da95"
+    }
+  },
+  {
+    "id": "catppuccin-mocha",
+    "name": "Catppuccin Mocha",
+    "dark": true,
+    "colors": {
+      "bg": "#1e1e2e",
+      "text": "#cdd6f4",
+      "accent": "#cba6f7",
+      "track": "#45475a",
+      "warn": "#f9e2af",
+      "crit": "#f38ba8",
+      "primary": "#cba6f7",
+      "grid": "#45475a",
+      "success": "#a6e3a1"
+    }
+  },
+  {
+    "id": "catppuccin-mocha-teal",
+    "name": "Catppuccin Mocha Teal",
+    "dark": true,
+    "colors": {
+      "bg": "#1e1e2e",
+      "text": "#cdd6f4",
+      "accent": "#94e2d5",
+      "track": "#45475a",
+      "warn": "#f9e2af",
+      "crit": "#f38ba8",
+      "primary": "#94e2d5",
+      "grid": "#45475a",
+      "success": "#a6e3a1"
+    }
+  },
+  {
+    "id": "dracula",
+    "name": "Dracula",
+    "dark": true,
+    "colors": {
+      "bg": "#282a36",
+      "text": "#f8f8f2",
+      "accent": "#bd93f9",
+      "track": "#44475a",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#bd93f9",
+      "grid": "#44475a",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "dracula-cyan",
+    "name": "Dracula Cyan",
+    "dark": true,
+    "colors": {
+      "bg": "#282a36",
+      "text": "#f8f8f2",
+      "accent": "#8be9fd",
+      "track": "#44475a",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#8be9fd",
+      "grid": "#44475a",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "dracula-green",
+    "name": "Dracula Green",
+    "dark": true,
+    "colors": {
+      "bg": "#1c2820",
+      "text": "#f8f8f2",
+      "accent": "#50fa7b",
+      "track": "#34413e",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#50fa7b",
+      "grid": "#34413e",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "dracula-midnight",
+    "name": "Dracula Midnight",
+    "dark": true,
+    "colors": {
+      "bg": "#191a21",
+      "text": "#f8f8f2",
+      "accent": "#bd93f9",
+      "track": "#282a36",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#bd93f9",
+      "grid": "#282a36",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "dracula-orange",
+    "name": "Dracula Orange",
+    "dark": true,
+    "colors": {
+      "bg": "#26201b",
+      "text": "#f8f8f2",
+      "accent": "#ffb86c",
+      "track": "#433930",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#ffb86c",
+      "grid": "#433930",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "dracula-pink",
+    "name": "Dracula Pink",
+    "dark": true,
+    "colors": {
+      "bg": "#282a36",
+      "text": "#f8f8f2",
+      "accent": "#ff79c6",
+      "track": "#44475a",
+      "warn": "#f1fa8c",
+      "crit": "#ff5555",
+      "primary": "#ff79c6",
+      "grid": "#44475a",
+      "success": "#50fa7b"
+    }
+  },
+  {
+    "id": "github-dark",
+    "name": "GitHub Dark",
+    "dark": true,
+    "colors": {
+      "bg": "#0d1117",
+      "text": "#f0f6fc",
+      "accent": "#1f6feb",
+      "track": "#21262d",
+      "warn": "#d29922",
+      "crit": "#da3633",
+      "primary": "#1f6feb",
+      "grid": "#3d444d",
+      "success": "#3fb950"
+    }
+  },
+  {
+    "id": "gruvbox-dark",
+    "name": "Gruvbox Dark",
+    "dark": true,
+    "colors": {
+      "bg": "#282828",
+      "text": "#ebdbb2",
+      "accent": "#fabd2f",
+      "track": "#504945",
+      "warn": "#fe8019",
+      "crit": "#fb4934",
+      "primary": "#fabd2f",
+      "grid": "#504945",
+      "success": "#b8bb26"
+    }
+  },
+  {
+    "id": "gruvbox-light",
+    "name": "Gruvbox Light",
+    "dark": false,
+    "colors": {
+      "bg": "#fbf1c7",
+      "text": "#282828",
+      "accent": "#d79921",
+      "track": "#d5c4a1",
+      "warn": "#d65d0e",
+      "crit": "#cc241d",
+      "primary": "#d79921",
+      "grid": "#d5c4a1",
+      "success": "#98971a"
+    }
+  },
+  {
+    "id": "nord-dark",
+    "name": "Nord Dark",
+    "dark": true,
+    "colors": {
+      "bg": "#2e3440",
+      "text": "#e5e9f0",
+      "accent": "#88c0d0",
+      "track": "#434c5e",
+      "warn": "#ebcb8b",
+      "crit": "#bf616a",
+      "primary": "#88c0d0",
+      "grid": "#434c5e",
+      "success": "#a3be8c"
+    }
+  },
+  {
+    "id": "nord-light",
+    "name": "Nord Light",
+    "dark": false,
+    "colors": {
+      "bg": "#eceff4",
+      "text": "#2e3440",
+      "accent": "#5e81ac",
+      "track": "#d8dee9",
+      "warn": "#d08770",
+      "crit": "#bf616a",
+      "primary": "#5e81ac",
+      "grid": "#d8dee9",
+      "success": "#8fbcbb"
+    }
+  },
+  {
+    "id": "proxmox-dark",
+    "name": "Proxmox Dark",
+    "dark": true,
+    "colors": {
+      "bg": "#262626",
+      "text": "#f2f2f2",
+      "accent": "#0060a4",
+      "track": "#333",
+      "warn": "#ffae0b",
+      "crit": "#ce3c3c",
+      "primary": "#0060a4",
+      "grid": "#4d4d4d",
+      "success": null
+    }
+  },
+  {
+    "id": "solarized-dark",
+    "name": "Solarized Dark",
+    "dark": true,
+    "colors": {
+      "bg": "#002b36",
+      "text": "#93a1a1",
+      "accent": "#268bd2",
+      "track": "#586e75",
+      "warn": "#b58900",
+      "crit": "#dc322f",
+      "primary": "#268bd2",
+      "grid": "#586e75",
+      "success": "#859900"
+    }
+  },
+  {
+    "id": "solarized-light",
+    "name": "Solarized Light",
+    "dark": false,
+    "colors": {
+      "bg": "#fdf6e3",
+      "text": "#002b36",
+      "accent": "#268bd2",
+      "track": "#93a1a1",
+      "warn": "#b58900",
+      "crit": "#dc322f",
+      "primary": "#268bd2",
+      "grid": "#93a1a1",
+      "success": "#859900"
+    }
+  },
+  {
+    "id": "tokyo-night",
+    "name": "Tokyo Night",
+    "dark": true,
+    "colors": {
+      "bg": "#1a1b26",
+      "text": "#c0caf5",
+      "accent": "#7aa2f7",
+      "track": "#24283b",
+      "warn": "#e0af68",
+      "crit": "#f7768e",
+      "primary": "#7aa2f7",
+      "grid": "#24283b",
+      "success": "#9ece6a"
+    }
+  },
+  {
+    "id": "unifi",
+    "name": "UniFi",
+    "dark": true,
+    "colors": {
+      "bg": "#131416",
+      "text": "#B7BCC2",
+      "accent": "#4797FF",
+      "track": "#34383D",
+      "warn": "#f5a623",
+      "crit": "#f03a3e",
+      "primary": "#37BE5F",
+      "grid": "#34383D",
+      "success": "#39cc64"
+    }
+  },
+  {
+    "id": "unifi-light",
+    "name": "UniFi Light",
+    "dark": false,
+    "colors": {
+      "bg": "#FFFFFF",
+      "text": "#585C66",
+      "accent": "#4797FF",
+      "track": "#ECEDF0",
+      "warn": "#f5a623",
+      "crit": "#f03a3e",
+      "primary": "#37BE5F",
+      "grid": "#DDDDE0",
+      "success": "#39cc64"
+    }
+  },
+  {
+    "id": "unifi-oled",
+    "name": "UniFi OLED",
+    "dark": true,
+    "colors": {
+      "bg": "#000000",
+      "text": "#c2c7cd",
+      "accent": "#4797FF",
+      "track": "#1e1e1e",
+      "warn": "#f5a623",
+      "crit": "#f03a3e",
+      "primary": "#37BE5F",
+      "grid": "#1e1e1e",
+      "success": "#39cc64"
+    }
+  }
+]

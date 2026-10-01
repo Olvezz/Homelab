@@ -1,0 +1,23 @@
+appId: local.olvezz.homelab-desktop
+productName: HomeLab Desktop
+directories:
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+  - resources/**/*
+win:
+  target: nsis
+  icon: resources/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  # Los datos (config, paneles, sesiones) viven en %APPDATA%\homelab-desktop: nunca se borran al desinstalar ni actualizar
+  deleteAppDataOnUninstall: false
+# Auto-update: descarga las versiones publicadas (GitHub Releases) por HTTPS y valida su sha512.
+# Publicar una versión: ver README ("Publicar una actualización").
+publish:
+  - provider: github
+    owner: Olvezz
+    repo: Homelab
