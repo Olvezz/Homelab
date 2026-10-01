@@ -6,6 +6,7 @@ import {
   type Panel,
   type PowerAction,
   type PveConfigView,
+  type PanelStatus,
   type PveSnapshot,
   type AiConnection,
   type AiEvent,
@@ -55,6 +56,7 @@ interface State {
   pve: PveConfigView | null
   snapshot: PveSnapshot
   themeCookie: string | null
+  panelStatus: Record<string, PanelStatus>
   update: UpdateStatus
   activeId: string | null
   page: Page
@@ -171,6 +173,7 @@ export const useStore = create<State>((set, get) => ({
   pve: null,
   snapshot: emptySnapshot,
   themeCookie: null,
+  panelStatus: {},
   update: { state: 'idle' },
   activeId: null,
   page: 'view',
@@ -232,6 +235,8 @@ export const useStore = create<State>((set, get) => ({
         }
       })
       window.api.onThemeCookie((value) => set({ themeCookie: value }))
+      window.api.onPanelStatus((panelStatus) => set({ panelStatus }))
+      void window.api.getPanelStatus().then((panelStatus) => set({ panelStatus }))
       window.api.onSshData((e) => pushData(e.id, e.data))
       window.api.onSshState((e) => {
         if (!get().sshSessions.some((s) => s.id === e.id)) {

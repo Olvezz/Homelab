@@ -142,6 +142,7 @@ function createWindow(store: ConfigStore): void {
     nativeTheme.themeSource = mode
   }
   views.onThemeCookie = (value) => send(IPC.themeCookie, value)
+  views.onPanelStatus = (status) => send(IPC.panelStatus, status)
   const updater = new Updater(
     () => store.get().ui.autoUpdate,
     (status) => send(IPC.updateStatus, status),

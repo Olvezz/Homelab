@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContentsView, clipboard, session, shell } from 'electron'
 import type { Session, WebContents } from 'electron'
-import { TOOLBAR_HEIGHT, type NavAction, type Panel, type ViewState } from '../shared/types'
+import { TOOLBAR_HEIGHT, type NavAction, type Panel, type PanelStatus, type ViewState } from '../shared/types'
 import type { CertTrust } from './security/certTrust'
 
 const MAX_LIVE_VIEWS = 8
@@ -42,6 +42,13 @@ export class ViewManager {
   private overlay = false
   // Tema elegido en la web de Proxmox (cookie PVEThemeCookie); null si se borra
   onThemeCookie?: (value: string | null) => void
+  // Estado de cada panel (en uso / cargando / error / apagado + sesión guardada) para la barra lateral
+  onPanelStatus?: (status: Record<string, PanelStatus>) => void
+  private runState = new Map<string, 'loading' | 'ready' | 'error'>()
+  private sessionFlags = new Map<string, boolean>()
+  private statusTimer: NodeJS.Timeout | null = null
+  private refreshTimer: NodeJS.Timeout | null = null
+  private lastStatusSig = ''
 
   constructor(
     private win: BrowserWindow,
@@ -57,6 +64,65 @@ export class ViewManager {
     win.on('enter-full-screen', relayout)
     win.on('leave-full-screen', relayout)
     win.on('restore', relayout)
+    // Las cookies caducan solas: se revisa de vez en cuando qué paneles tienen sesión
+    setInterval(() => void this.refreshSessions(), 30_000).unref()
+  }
+
+  statusMap(): Record<string, PanelStatus> {
+    const out: Record<string, PanelStatus> = {}
+    for (const id of this.panels.keys()) {
+      const entry = this.entries.get(id)
+      out[id] = {
+        state: entry ? (this.runState.get(id) ?? 'loading') : 'off',
+        lastUsed: entry?.lastUsed,
+        hasSession: this.sessionFlags.get(id) ?? false
+      }
+    }
+    return out
+  }
+
+  private scheduleStatus(): void {
+    if (this.statusTimer) return
+    this.statusTimer = setTimeout(() => {
+      this.statusTimer = null
+      const map = this.statusMap()
+      const sig = JSON.stringify(map)
+      if (sig === this.lastStatusSig) return
+      this.lastStatusSig = sig
+      this.onPanelStatus?.(map)
+    }, 150)
+  }
+
+  // «Sesión iniciada» = la partición del panel guarda cookies para ese sitio
+  async refreshSessions(): Promise<void> {
+    for (const [id, panel] of this.panels) {
+      try {
+        const ses = session.fromPartition(`persist:svc-${panel.sessionId ?? panel.id}`)
+        const cookies = await ses.cookies.get({ url: panel.url })
+        this.sessionFlags.set(id, cookies.length > 0)
+      } catch {
+        this.sessionFlags.set(id, false)
+      }
+    }
+    this.scheduleStatus()
+  }
+
+  private refreshSoon(): void {
+    if (this.refreshTimer) return
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null
+      void this.refreshSessions()
+    }, 1000)
+  }
+
+  // Apaga la vista (libera memoria) sin tocar su sesión guardada
+  stop(panelId: string): void {
+    if (!this.entries.has(panelId)) return
+    const wasActive = panelId === this.activeId
+    this.destroy(panelId)
+    if (wasActive) this.activeId = null
+    this.layout()
+    this.scheduleStatus()
   }
 
   setSidebarWidth(width: number): void {
@@ -67,6 +133,7 @@ export class ViewManager {
   // Sincroniza con la lista de paneles: descarta las vistas de paneles borrados o con otra URL
   setPanels(panels: Panel[]): void {
     this.panels = new Map(panels.map((p) => [p.id, p]))
+    void this.refreshSessions()
     let activeDestroyed = false
     for (const [id, entry] of [...this.entries]) {
       const next = this.panels.get(id)
@@ -101,6 +168,7 @@ export class ViewManager {
     if (this.activeId) {
       const entry = this.entries.get(this.activeId) ?? this.create(this.panels.get(this.activeId)!)
       entry.lastUsed = Date.now()
+      this.scheduleStatus()
     }
     this.layout()
     if (this.activeId && !this.overlay) this.entries.get(this.activeId)?.view.webContents.focus()
@@ -200,16 +268,33 @@ export class ViewManager {
     })
 
     const update = (): void => this.emitState(panel.id)
-    wc.on('did-start-loading', update)
-    wc.on('did-stop-loading', update)
+    wc.on('did-start-loading', () => {
+      this.runState.set(panel.id, 'loading')
+      this.scheduleStatus()
+      update()
+    })
+    wc.on('did-stop-loading', () => {
+      if (this.runState.get(panel.id) !== 'error') this.runState.set(panel.id, 'ready')
+      this.refreshSoon()
+      this.scheduleStatus()
+      update()
+    })
     wc.on('did-navigate', update)
     wc.on('did-navigate-in-page', update)
     wc.on('page-title-updated', update)
-    wc.on('did-fail-load', update)
+    wc.on('did-fail-load', (_e, errorCode, _desc, _url, isMainFrame) => {
+      if (isMainFrame && errorCode !== -3) {
+        this.runState.set(panel.id, 'error')
+        this.scheduleStatus()
+      }
+      update()
+    })
 
     this.win.contentView.addChildView(view)
     const entry: Entry = { view, panel, lastUsed: Date.now() }
     this.entries.set(panel.id, entry)
+    this.runState.set(panel.id, 'loading')
+    this.scheduleStatus()
     void wc.loadURL(initialUrl ?? panel.url).catch(() => undefined) // los fallos se ven en la propia vista
     return entry
   }
@@ -234,6 +319,7 @@ export class ViewManager {
     // PVEAuthCookie llega como cookie de sesión: se re-guarda con caducidad (~2 h) para
     // seguir logueado tras reiniciar la app. Nunca se guarda la contraseña.
     ses.cookies.on('changed', (_event, cookie, cause, removed) => {
+      this.refreshSoon()
       if (cookie.name === THEME_COOKIE) {
         if (!removed) this.onThemeCookie?.(cookie.value)
         else if (cause !== 'overwrite') this.onThemeCookie?.(null)
@@ -319,6 +405,8 @@ export class ViewManager {
     const entry = this.entries.get(id)
     if (!entry) return
     this.entries.delete(id)
+    this.runState.delete(id)
+    this.scheduleStatus()
     this.win.contentView.removeChildView(entry.view)
     entry.view.webContents.close()
   }

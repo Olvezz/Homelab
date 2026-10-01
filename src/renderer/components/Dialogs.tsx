@@ -283,6 +283,7 @@ interface MenuEntry {
 export function ItemMenu(): React.JSX.Element | null {
   const menu = useStore((s) => s.itemMenu)
   const panels = useStore((s) => s.panels)
+  const panelStatus = useStore((s) => s.panelStatus)
   const guests = useStore((s) => s.snapshot.guests)
   const connections = useStore((s) => s.sshConnections)
   const sessions = useStore((s) => s.sshSessions)
@@ -355,8 +356,16 @@ export function ItemMenu(): React.JSX.Element | null {
     if (p.kind === 'tab') entries.push({ label: t('menuCloseTab'), separator: true, run: () => s.closeTab(p.id) })
     else {
       entries.push({
-        label: t('menuClearData'),
+        label: t('menuStopView'),
         separator: true,
+        disabled: (panelStatus[p.id]?.state ?? 'off') === 'off',
+        run: () => {
+          void window.api.stopPanel(p.id)
+          if (s.page === 'view' && s.activeId === p.id) s.openHome()
+        }
+      })
+      entries.push({
+        label: t('menuClearData'),
         run: () =>
           s.askConfirm({
             title: t('menuClearTitle', { name: p.name }),

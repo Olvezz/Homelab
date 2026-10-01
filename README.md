@@ -65,6 +65,7 @@ Formato: `panel: <nombre> | <url>` (el icono se asigna solo; ver *Iconos*). Alte
 
 - **Clic** en un guest con un solo panel lo abre; con varios, se expande. Un guest sin paneles se abre en la web de Proxmox.
 - **Clic derecho**: Iniciar, Apagar, Reiniciar, Forzar apagado (con confirmación), Abrir consola, Abrir en Proxmox, Copiar IP, Refrescar. El resultado de la tarea (UPID) aparece como aviso en la barra superior.
+- **Estado de los paneles:** cada panel de la barra lateral lleva un punto: verde = **en uso** (su vista está abierta), ámbar = cargando, rojo = no se pudo cargar, hueco = apagado (no abierto en esta sesión). El **candado** indica que hay una sesión guardada (cookies) para ese sitio, es decir, que ya iniciaste sesión; el tooltip añade cuándo lo usaste por última vez. Las vistas se abren al primer uso; con clic derecho → *Apagar vista* se libera su memoria sin perder la sesión.
 - La consola (xterm.js / noVNC, también con el botón ⌨ de cada guest) se abre en una pestaña que comparte la sesión web de Proxmox: inicia sesión una vez en el panel Proxmox.
 - Cada guest encendido tiene un botón de consola (⌨) al pasar el ratón.
 - Atajos: `Ctrl+K` buscar, `Ctrl+1..9` paneles, `Ctrl+R` recargar la vista, `Ctrl+Shift+R` refrescar datos de Proxmox, `Ctrl+B` colapsar la barra, `F11` pantalla completa.
@@ -136,7 +137,7 @@ Barra lateral → *IA → Asistente* (o clic derecho en un guest → *Preguntar 
 
 ## Clic derecho
 
-En la barra lateral, clic derecho sobre cualquier elemento abre sus acciones: **paneles** (abrir, recargar, abrir en el navegador, copiar URL, editar/eliminar si es manual, editar las notas en Proxmox si es descubierto, cerrar la sesión del sitio), **conexiones SSH** (conectar, editar, copiar usuario@host, eliminar), **sesiones SSH** (ir, reconectar, cerrar) y **guests** (energía, consola, SSH, abrir en Proxmox, copiar IP).
+En la barra lateral, clic derecho sobre cualquier elemento abre sus acciones: **paneles** (abrir, recargar, abrir en el navegador, copiar URL, apagar vista, editar/eliminar si es manual, editar las notas en Proxmox si es descubierto, cerrar la sesión del sitio), **conexiones SSH** (conectar, editar, copiar usuario@host, eliminar), **sesiones SSH** (ir, reconectar, cerrar) y **guests** (energía, consola, SSH, abrir en Proxmox, copiar IP).
 
 ## Iconos
 

@@ -1,7 +1,8 @@
 import { useRef } from 'react'
-import type { Guest, Panel, PveStatus } from '../../shared/types'
+import type { Guest, Panel, PanelStatus, PveStatus } from '../../shared/types'
 import { t, type Key } from '../i18n'
 import { effectiveSidebarWidth, listedPanels, resolvePanel, useStore } from '../store'
+import { fmtAgo } from '../homeFormat'
 import { guestIconKey, Icon, panelIconKey } from './Icon'
 
 const STATUS_KEY: Record<PveStatus, Key> = {
@@ -136,6 +137,27 @@ function GuestRow({ guest, collapsed }: { guest: Guest; collapsed: boolean }): R
   )
 }
 
+const STATE_CLASS = { off: 'off', loading: 'unknown', ready: 'running', error: 'bad' } as const
+
+// Texto del tooltip: estado de la vista, último uso y sesión guardada
+function panelTip(status: PanelStatus | undefined): string {
+  const state = status?.state ?? 'off'
+  const label = { off: t('panelOff'), loading: t('panelLoading'), ready: t('panelReady'), error: t('panelError') }[state]
+  const used = status?.lastUsed && state !== 'off' ? ` · ${t('panelUsed', { ago: fmtAgo(status.lastUsed) })}` : ''
+  return `${label}${used} · ${status?.hasSession ? t('panelSession') : t('panelNoSession')}`
+}
+
+// Punto de estado (verde en uso, ámbar cargando, rojo falló, hueco apagado) y candado si hay sesión guardada
+function PanelState({ status, corner }: { status: PanelStatus | undefined; corner?: boolean }): React.JSX.Element {
+  const state = status?.state ?? 'off'
+  return (
+    <span className={`panel-state${corner ? ' corner' : ''}`} aria-label={panelTip(status)}>
+      <span className={`dot ${STATE_CLASS[state]}`} />
+      {!corner && status?.hasSession && <Icon k="ui:lock" size={11} className="lock" />}
+    </span>
+  )
+}
+
 function PanelButton({
   panel,
   nested,
@@ -150,6 +172,7 @@ function PanelButton({
   const selectPanel = useStore((s) => s.selectPanel)
   const closeTab = useStore((s) => s.closeTab)
   const openItemMenu = useStore((s) => s.openItemMenu)
+  const status = useStore((s) => s.panelStatus[panel.id])
   const guest = useStore((s) => (panel.vmid ? s.snapshot.guests.find((g) => g.vmid === panel.vmid) : undefined))
   const active = page === 'view' && panel.id === activeId
   return (
@@ -160,11 +183,13 @@ function PanelButton({
         openItemMenu('panel', panel.id, e.clientX, e.clientY)
       }}
     >
-      <button className="panel-item" onClick={() => selectPanel(panel.id)} title={`${panel.name} — ${panel.url}`}>
+      <button className="panel-item" onClick={() => selectPanel(panel.id)} title={`${panel.name} — ${panel.url}\n${panelTip(status)}`}>
         <span className="panel-icon">
           <Icon k={panelIconKey(panel, guest)} />
+          {collapsed && <PanelState status={status} corner />}
         </span>
         {!collapsed && <span className="panel-name">{panel.name}</span>}
+        {!collapsed && <PanelState status={status} />}
       </button>
       {panel.kind === 'tab' && !collapsed && (
         <button className="tab-close" title={t('closeTab')} aria-label={t('closeTab')} onClick={() => closeTab(panel.id)}>

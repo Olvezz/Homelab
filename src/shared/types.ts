@@ -24,6 +24,8 @@ export const IPC = {
   pveApproveExternal: 'pve:approve-external',
   setNativeTheme: 'theme:native',
   monitorGet: 'monitor:get',
+  panelStatusGet: 'panel:status-get',
+  panelStop: 'panel:stop',
   aiList: 'ai:list',
   aiSave: 'ai:save',
   aiDelete: 'ai:delete',
@@ -64,6 +66,7 @@ export const IPC = {
   themeCookie: 'theme:cookie',
   updateStatus: 'update:status',
   aiEvent: 'ai:event',
+  panelStatus: 'panel:status',
   sshData: 'ssh:data',
   sshState: 'ssh:state',
   sshHostPrompt: 'ssh:host-prompt',
@@ -404,6 +407,15 @@ export interface ProvisionView {
   uninstall: string // comando para quitar el vigilante del nodo
 }
 
+// Estado de la vista web de un panel: 'off' = apagada (no abierta en esta sesión de la app)
+export type PanelRunState = 'off' | 'loading' | 'ready' | 'error'
+
+export interface PanelStatus {
+  state: PanelRunState
+  lastUsed?: number // epoch ms del último momento en que se mostró
+  hasSession: boolean // hay cookies guardadas para ese sitio (sesión iniciada)
+}
+
 export interface ViewState {
   panelId: string
   url: string
@@ -483,6 +495,9 @@ export interface Api {
   onPanels(cb: (panels: Panel[]) => void): () => void
   onSnapshot(cb: (snapshot: PveSnapshot) => void): () => void
   setNativeTheme(mode: 'dark' | 'light'): Promise<void>
+  getPanelStatus(): Promise<Record<string, PanelStatus>>
+  stopPanel(panelId: string): Promise<void>
+  onPanelStatus(cb: (status: Record<string, PanelStatus>) => void): () => void
   getMonitor(node: string, timeframe: Timeframe): Promise<MonitorSnapshot>
   listAi(): Promise<AiConnection[]>
   saveAi(input: AiConnectionInput): Promise<AiConnection[]>

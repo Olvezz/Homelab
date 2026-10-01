@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Globe,
   Loader,
+  Lock,
   Menu,
   Minus,
   Monitor,
@@ -58,7 +59,8 @@ const UI: Record<string, LucideIcon> = {
   alert: TriangleAlert,
   download: Download,
   external: ExternalLink,
-  loader: Loader
+  loader: Loader,
+  lock: Lock
 }
 
 export const isKnownIcon = (key: string): boolean =>

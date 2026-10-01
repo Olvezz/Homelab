@@ -138,6 +138,8 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     clipboard.writeText(z.string().max(200000).parse(raw))
   })
 
+  handle(IPC.panelStatusGet, () => views.statusMap())
+  handle(IPC.panelStop, (raw) => views.stop(idSchema.parse(raw)))
   handle(IPC.monitorGet, (...raw) => {
     const [node, timeframe] = z.tuple([z.string().regex(/^[A-Za-z0-9-]{1,63}$/), z.enum(['hour', 'day', 'week'])]).parse(raw)
     return monitor.get(node, timeframe)
