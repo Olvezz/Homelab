@@ -149,10 +149,17 @@ function PanelButton({
   const page = useStore((s) => s.page)
   const selectPanel = useStore((s) => s.selectPanel)
   const closeTab = useStore((s) => s.closeTab)
+  const openItemMenu = useStore((s) => s.openItemMenu)
   const guest = useStore((s) => (panel.vmid ? s.snapshot.guests.find((g) => g.vmid === panel.vmid) : undefined))
   const active = page === 'view' && panel.id === activeId
   return (
-    <div className={`panel-row${active ? ' active' : ''}${nested ? ' nested' : ''}`}>
+    <div
+      className={`panel-row${active ? ' active' : ''}${nested ? ' nested' : ''}`}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        openItemMenu('panel', panel.id, e.clientX, e.clientY)
+      }}
+    >
       <button className="panel-item" onClick={() => selectPanel(panel.id)} title={`${panel.name} — ${panel.url}`}>
         <span className="panel-icon">
           <Icon k={panelIconKey(panel, guest)} />
@@ -177,6 +184,7 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
   const selectSsh = useStore((s) => s.selectSsh)
   const closeSsh = useStore((s) => s.closeSsh)
   const openSettings = useStore((s) => s.openSettings)
+  const openItemMenu = useStore((s) => s.openItemMenu)
 
   if (collapsed && connections.length === 0 && sessions.length === 0) return null
   const dot = (state: string): string =>
@@ -187,7 +195,7 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
       {!collapsed && (
         <div className="sidebar-section with-action">
           <span>{t('sshSection')}</span>
-          <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-section')}>
+          <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-form')}>
             <Icon k="ui:plus" size={13} />
           </button>
         </div>
@@ -195,7 +203,14 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
       <div className="panel-list">
         {connections.length === 0 && !collapsed && <div className="empty">{t('sshNone')}</div>}
         {connections.map((c) => (
-          <div className="panel-row" key={c.id}>
+          <div
+            className="panel-row"
+            key={c.id}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              openItemMenu('ssh', c.id, e.clientX, e.clientY)
+            }}
+          >
             <button
               className="panel-item"
               title={`${c.username}@${c.host}:${c.port}`}
@@ -214,7 +229,14 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
           {!collapsed && <div className="sidebar-section">{t('sshSessions')}</div>}
           <div className="panel-list">
             {sessions.map((s) => (
-              <div className={`panel-row${page === 'ssh' && s.id === activeSshId ? ' active' : ''}`} key={s.id}>
+              <div
+                className={`panel-row${page === 'ssh' && s.id === activeSshId ? ' active' : ''}`}
+                key={s.id}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  openItemMenu('session', s.id, e.clientX, e.clientY)
+                }}
+              >
                 <button className="panel-item" title={s.message ?? s.name} onClick={() => selectSsh(s.id)}>
                   <span className="panel-icon">
                     <span className={`dot ${dot(s.state)}`} />

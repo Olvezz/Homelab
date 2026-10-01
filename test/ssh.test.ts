@@ -74,7 +74,7 @@ describe('mensajes de error', () => {
     expect(f('All configured authentication methods failed')).toContain('Autenticación rechazada')
     expect(f('connect ECONNREFUSED 10.0.0.52:22')).toContain('rechazada en 10.0.0.52:22')
     expect(f('Timed out while waiting for handshake')).toContain('Tailscale')
-    expect(f('Cannot parse privateKey: Unsupported key format', 'key')).toContain('PuTTYgen')
+    expect(f('Cannot parse privateKey: Unsupported key format', 'key')).toContain('formato no reconocido')
     expect(f('Encrypted private key detected, but no passphrase given', 'key')).toContain('frase de paso')
     expect(f('All configured authentication methods failed', 'agent')).toContain('agente')
   })

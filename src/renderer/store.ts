@@ -20,6 +20,8 @@ import {
 import { errMsg, t } from './i18n'
 import { pushData } from './sshBus'
 
+export type ItemKind = 'panel' | 'ssh' | 'session'
+
 export type Page = 'view' | 'settings' | 'wizard' | 'ssh'
 
 export interface ConfirmState {
@@ -46,6 +48,8 @@ interface State {
   confirm: ConfirmState | null
   menu: { guest: Guest; x: number; y: number } | null
   searchOpen: boolean
+  itemMenu: { kind: ItemKind; id: string; x: number; y: number } | null // menú contextual de un elemento de la barra lateral
+  editRequest: { kind: 'panel' | 'ssh'; id: string } | null // elemento a editar al abrir Ajustes
   expanded: Record<string, boolean>
   sshConnections: SshConnection[]
   sshSessions: SshSession[]
@@ -71,6 +75,9 @@ interface State {
   closeConfirm: () => void
   openMenu: (guest: Guest, x: number, y: number) => void
   closeMenu: () => void
+  openItemMenu: (kind: ItemKind, id: string, x: number, y: number) => void
+  closeItemMenu: () => void
+  requestEdit: (kind: 'panel' | 'ssh', id: string) => void
   setSearch: (open: boolean) => void
   toggleExpand: (key: string) => void
   setSshConnections: (connections: SshConnection[]) => void
@@ -141,6 +148,8 @@ export const useStore = create<State>((set, get) => ({
   toast: null,
   confirm: null,
   menu: null,
+  itemMenu: null,
+  editRequest: null,
   searchOpen: false,
   expanded: {},
   sshConnections: [],
@@ -263,10 +272,13 @@ export const useStore = create<State>((set, get) => ({
   },
   dismissToast: () => set({ toast: null }),
 
-  askConfirm: (confirm) => set({ confirm, menu: null }),
+  askConfirm: (confirm) => set({ confirm, menu: null, itemMenu: null }),
   closeConfirm: () => set({ confirm: null }),
   openMenu: (guest, x, y) => set({ menu: { guest, x, y } }),
   closeMenu: () => set({ menu: null }),
+  openItemMenu: (kind, id, x, y) => set({ itemMenu: { kind, id, x, y }, menu: null }),
+  closeItemMenu: () => set({ itemMenu: null }),
+  requestEdit: (kind, id) => set({ editRequest: { kind, id } }),
   setSearch: (open) => set({ searchOpen: open }),
   toggleExpand: (key) => set((s) => ({ expanded: { ...s.expanded, [key]: !s.expanded[key] } })),
 
@@ -341,7 +353,7 @@ export const useStore = create<State>((set, get) => ({
     if (conn) return get().openSsh(conn.id)
     // Sin conexión guardada para esa IP: se abre el formulario con los datos del guest
     set({ sshDraft: { name: guest.name, host: ip, port: 22, username: 'root', auth: 'password' } })
-    get().openSettings('ssh-section')
+    get().openSettings('ssh-form')
     get().showToast('info', t('sshNewFromGuest'))
   },
 

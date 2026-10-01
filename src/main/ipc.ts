@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
+import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { z } from 'zod'
 import {
   COLLAPSED_SIDEBAR_WIDTH,
@@ -148,6 +148,9 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     })
     return r.canceled ? null : (r.filePaths[0] ?? null)
   })
+  handle(IPC.sshTest, (raw) => ssh.test(sshConnectionSchema.parse(raw)))
+  handle(IPC.panelOpenUrl, (raw) => shell.openExternal(httpUrlSchema.parse(raw)))
+  handle(IPC.panelClearData, (raw) => views.clearData(idSchema.parse(raw)))
   handle(IPC.sshOpen, (...raw) => {
     const [connId, cols, rows, secret] = z
       .tuple([

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { CertPrompt } from './components/CertPrompt'
-import { ConfirmDialog, GuestMenu, SearchPalette } from './components/Dialogs'
+import { ConfirmDialog, GuestMenu, ItemMenu, SearchPalette } from './components/Dialogs'
 import { Settings } from './components/Settings'
 import { SshHostPrompt, SshSecretPrompt } from './components/SshDialogs'
 import { SshView } from './components/SshView'
@@ -17,7 +17,7 @@ export function App(): React.JSX.Element {
   const activeId = useStore((s) => s.activeId)
   const page = useStore((s) => s.page)
   const certQueue = useStore((s) => s.certQueue)
-  const menuOpen = useStore((s) => !!s.menu)
+  const menuOpen = useStore((s) => !!s.menu || !!s.itemMenu)
   const confirmOpen = useStore((s) => !!s.confirm)
   const searchOpen = useStore((s) => s.searchOpen)
   const sshModal = useStore((s) => s.sshHostQueue.length > 0 || !!s.sshSecretPrompt)
@@ -69,6 +69,7 @@ export function App(): React.JSX.Element {
         {page === 'view' && !activeId && <div className="placeholder">{t('selectPanel')}</div>}
       </main>
       <GuestMenu />
+      <ItemMenu />
       <ConfirmDialog />
       <SearchPalette />
       <SshHostPrompt />

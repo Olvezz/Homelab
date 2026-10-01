@@ -9,14 +9,34 @@ import type {
   SshConnectionInput,
   SshHostPromptInfo,
   SshSession,
-  SshStateEvent
+  SshStateEvent,
+  SshTestResult
 } from '../../shared/types'
 import type { ConfigStore } from '../config/store'
 import { log } from '../log'
+import { isPpk, PpkError, ppkToOpenSsh } from './ppk'
 import { authForPutty, friendlySshError, hostFingerprint, hostKeyType, parsePuttySessions } from './util'
 
 const MAX_KEY_BYTES = 64 * 1024
 const WINDOWS_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
+
+// Lee la clave privada. Los .ppk de PuTTY (v2/v3, RSA/ed25519/ECDSA) se convierten en memoria a OpenSSH;
+// el resto (OpenSSH, PEM) lo lee ssh2 directamente con la frase de paso.
+function loadPrivateKey(path: string | undefined, secret: string | undefined): { privateKey: Buffer; passphrase?: string } {
+  if (!path || !existsSync(path)) throw new Error('No se encontró el archivo de la clave')
+  if (statSync(path).size > MAX_KEY_BYTES) throw new Error('El archivo de la clave es demasiado grande')
+  const raw = readFileSync(path)
+  const text = raw.toString('utf8')
+  if (isPpk(text)) {
+    try {
+      return { privateKey: Buffer.from(ppkToOpenSsh(text, secret).pem) }
+    } catch (e) {
+      if (e instanceof PpkError) throw new Error(e.message)
+      throw e
+    }
+  }
+  return { privateKey: raw, passphrase: secret }
+}
 
 interface Live {
   session: SshSession
@@ -111,6 +131,96 @@ export class SshManager {
     return { added, connections: this.list() }
   }
 
+  // Prueba una conexión sin abrir terminal. Nunca envía credenciales a un servidor cuya huella no esté
+  // confirmada: con un servidor desconocido solo comprueba que responde y enseña su huella.
+  async test(input: SshConnectionInput): Promise<SshTestResult> {
+    const existing = input.id ? this.store.get().ssh.find((c) => c.id === input.id) : undefined
+    let secret = input.secret
+    if (secret === undefined && existing?.secretEnc && safeStorage.isEncryptionAvailable()) {
+      try {
+        secret = safeStorage.decryptString(Buffer.from(existing.secretEnc, 'base64'))
+      } catch {
+        secret = undefined
+      }
+    }
+    if (input.auth === 'password' && !secret) {
+      return { level: 'warn', message: 'Escribe la contraseña para probar el acceso (no hace falta guardarla)' }
+    }
+    let privateKey: Buffer | undefined
+    let keyPassphrase: string | undefined
+    if (input.auth === 'key') {
+      try {
+        const k = loadPrivateKey(input.keyPath, secret)
+        privateKey = k.privateKey
+        keyPassphrase = k.passphrase
+      } catch (e) {
+        return { level: 'error', message: e instanceof Error ? e.message : String(e) }
+      }
+    }
+
+    const { host, port, username, auth } = input
+    const saved = this.store.get().sshHostKeys[`${host}:${port}`]
+    return new Promise<SshTestResult>((resolve) => {
+      const client = new Client()
+      let settled = false
+      let seen = ''
+      let verdict: 'unknown' | 'changed' | null = null
+      const finish = (r: SshTestResult): void => {
+        if (settled) return
+        settled = true
+        try {
+          client.end()
+        } catch {
+          // ya cerrada
+        }
+        resolve(r)
+      }
+      client.on('ready', () =>
+        finish({ level: 'ok', message: `Correcto: ${username}@${host}:${port} acepta el acceso`, fingerprint: seen })
+      )
+      client.on('keyboard-interactive', (_n, _i, _l, prompts, answer) => answer(prompts.map(() => secret ?? '')))
+      client.on('error', (e) => {
+        if (verdict === 'unknown') {
+          finish({
+            level: 'warn',
+            message: `El servidor responde. Es la primera vez: huella ${seen}. No se probó el acceso; se te pedirá confirmar la huella al conectar.`,
+            fingerprint: seen
+          })
+        } else if (verdict === 'changed') {
+          finish({
+            level: 'error',
+            message: `¡La huella del servidor cambió! Ahora es ${seen} (guardada: ${saved}). No se envió ninguna credencial.`,
+            fingerprint: seen
+          })
+        } else {
+          finish({ level: 'error', message: friendlySshError(e.message, host, port, auth) })
+        }
+      })
+      client.on('close', () => finish({ level: 'error', message: 'La conexión se cerró antes de completar la prueba' }))
+      try {
+        client.connect({
+          host,
+          port,
+          username,
+          readyTimeout: 15000,
+          tryKeyboard: auth === 'password',
+          password: auth === 'password' ? secret : undefined,
+          privateKey,
+          passphrase: keyPassphrase,
+          agent: auth === 'agent' ? (process.env.SSH_AUTH_SOCK ?? (existsSync(WINDOWS_AGENT_PIPE) ? WINDOWS_AGENT_PIPE : 'pageant')) : undefined,
+          hostVerifier: ((key: Buffer, verify: (accept: boolean) => void) => {
+            seen = hostFingerprint(key)
+            if (saved === seen) return verify(true)
+            verdict = saved ? 'changed' : 'unknown'
+            verify(false) // sin huella confirmada no se autentica
+          }) as never
+        })
+      } catch (e) {
+        finish({ level: 'error', message: friendlySshError(e instanceof Error ? e.message : String(e), host, port, auth) })
+      }
+    })
+  }
+
   // ---- Sesiones ----
 
   async open(connId: string, cols: number, rows: number, secretOverride?: string): Promise<SshSession> {
@@ -128,10 +238,11 @@ export class SshManager {
     if (conn.auth === 'password' && !secret) throw new Error('NEEDS_SECRET')
 
     let privateKey: Buffer | undefined
+    let keyPassphrase: string | undefined
     if (conn.auth === 'key') {
-      if (!conn.keyPath || !existsSync(conn.keyPath)) throw new Error('No se encontró el archivo de la clave')
-      if (statSync(conn.keyPath).size > MAX_KEY_BYTES) throw new Error('El archivo de la clave es demasiado grande')
-      privateKey = readFileSync(conn.keyPath)
+      const k = loadPrivateKey(conn.keyPath, secret)
+      privateKey = k.privateKey
+      keyPassphrase = k.passphrase
     }
 
     const id = randomUUID()
@@ -180,7 +291,7 @@ export class SshManager {
         tryKeyboard: conn.auth === 'password',
         password: conn.auth === 'password' ? secret : undefined,
         privateKey,
-        passphrase: conn.auth === 'key' ? secret : undefined,
+        passphrase: keyPassphrase,
         agent: conn.auth === 'agent' ? (process.env.SSH_AUTH_SOCK ?? (existsSync(WINDOWS_AGENT_PIPE) ? WINDOWS_AGENT_PIPE : 'pageant')) : undefined,
         hostVerifier: ((key: Buffer, verify: (accept: boolean) => void) => this.verifyHost(live, key, verify)) as never
       })

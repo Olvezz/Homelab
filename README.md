@@ -88,8 +88,9 @@ Cualquier URL `http(s)` sirve: Ajustes → Añadir panel (p. ej. `https://vault.
 
 Terminal SSH dentro de la app, con varias sesiones a la vez (barra lateral → *SSH* y *Sesiones SSH*; `Ctrl+K` también las encuentra).
 
-- **Conexiones:** Ajustes → *Conexiones SSH*, o el botón **+** de la barra lateral, o clic derecho en un guest → *Abrir SSH* (rellena la IP). Acceso por **contraseña** (guardada cifrada con Windows, o se pide al conectar), **clave privada** (archivo OpenSSH/PEM o `.ppk` v2, con frase de paso opcional) o **agente** (Pageant / agente de OpenSSH de Windows).
-- **Importar de PuTTY:** lee tus sesiones guardadas (host, puerto, usuario, clave) del registro de Windows sin modificar nada de PuTTY. Los `.ppk` v3 (el formato actual de PuTTYgen) no se pueden leer directamente: conviértelos con PuTTYgen (*Conversions → Export OpenSSH key*) o cárgalos en Pageant y usa *Agente*.
+- **Conexiones:** Ajustes → *Conexiones SSH*, o el botón **+** de la barra lateral, o clic derecho en un guest → *Abrir SSH* (rellena la IP). Acceso por **contraseña** (guardada cifrada con Windows, o se pide al conectar), **clave privada** (OpenSSH, PEM o **`.ppk` de PuTTY** v2 y v3 —RSA, ed25519 y ECDSA, con o sin frase de paso—; el `.ppk` se lee directamente, sin convertirlo ni escribir nada en disco) o **agente** (Pageant / agente de OpenSSH de Windows).
+- **Importar de PuTTY:** lee tus sesiones guardadas (host, puerto, usuario, clave) del registro de Windows sin modificar nada de PuTTY. Las sesiones que usan Pageant, sin archivo de clave, se importan como contraseña: cámbialas a *Agente* al editarlas.
+- **Probar conexión:** en el formulario de la conexión. Comprueba el acceso sin abrir el terminal; si el servidor es desconocido solo muestra su huella y **no envía tu contraseña**.
 - **Huella del servidor:** se confirma la primera vez (como el `known_hosts` de OpenSSH) y se avisa con énfasis si cambia.
 - **Como PuTTY:** seleccionar copia, clic derecho pega (`Ctrl+Shift+V` también). Con un terminal delante, los atajos de la app (`Ctrl+R`, `Ctrl+K`, `Ctrl+B`, `Ctrl+1..9`) pasan al shell.
 
@@ -103,6 +104,10 @@ Ajustes → *Arranque de guests nuevos*. Cada VM o LXC **nuevo** se actualiza y 
 Qué instala: un temporizador de systemd (`homelab-provision.timer`, cada minuto) que detecta guests nuevos y les ejecuta el script (`pct exec` en LXC; `qm guest exec` en VM con qemu-guest-agent). Los guests que ya existían al instalar quedan como *baseline* y **no se tocan**; las plantillas y las VM Windows tampoco. Cada guest se prepara una vez (hasta 5 reintentos). Logs: `/var/log/homelab-provision/`. Para quitarlo: *Copiar comando para quitarlo*.
 
 La app nunca ejecuta nada en el nodo por su cuenta: solo genera el comando que tú pegas. Para las VM, lo ideal es llevar qemu-guest-agent ya en tu plantilla y activar *Options → QEMU Guest Agent*.
+
+## Clic derecho
+
+En la barra lateral, clic derecho sobre cualquier elemento abre sus acciones: **paneles** (abrir, recargar, abrir en el navegador, copiar URL, editar/eliminar si es manual, editar las notas en Proxmox si es descubierto, cerrar la sesión del sitio), **conexiones SSH** (conectar, editar, copiar usuario@host, eliminar), **sesiones SSH** (ir, reconectar, cerrar) y **guests** (energía, consola, SSH, abrir en Proxmox, copiar IP).
 
 ## Iconos
 

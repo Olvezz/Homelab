@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Panel, SshAuth } from '../../shared/types'
+import type { Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -134,6 +134,21 @@ const emptySsh: SshForm = {
   hasSecret: false
 }
 
+function toForm(c: SshConnection): SshForm {
+  return {
+    id: c.id,
+    name: c.name,
+    host: c.host,
+    port: String(c.port),
+    username: c.username,
+    auth: c.auth,
+    keyPath: c.keyPath ?? '',
+    secret: '',
+    clearSecret: false,
+    hasSecret: c.hasSecret
+  }
+}
+
 function SshConnections(): React.JSX.Element {
   const connections = useStore((s) => s.sshConnections)
   const setConnections = useStore((s) => s.setSshConnections)
@@ -142,6 +157,8 @@ function SshConnections(): React.JSX.Element {
   const showToast = useStore((s) => s.showToast)
   const draft = useStore((s) => s.sshDraft)
   const [form, setForm] = useState<SshForm>(emptySsh)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<SshTestResult | null>(null)
   const [error, setError] = useState('')
 
   // Conexión nueva con los datos de un guest (menú contextual → Abrir SSH)
@@ -151,27 +168,64 @@ function SshConnections(): React.JSX.Element {
     useStore.setState({ sshDraft: null })
   }, [draft])
 
+  // «Editar» desde el menú contextual de la barra lateral
+  const editRequest = useStore((s) => s.editRequest)
+  useEffect(() => {
+    if (editRequest?.kind !== 'ssh') return
+    const c = connections.find((x) => x.id === editRequest.id)
+    useStore.setState({ editRequest: null })
+    if (c) setForm(toForm(c))
+  }, [editRequest, connections])
+
+  // Valida el formulario y devuelve los datos listos para guardar o probar
+  const buildInput = (): SshConnectionInput | null => {
+    const fail = (message: string): null => {
+      setError(message)
+      return null
+    }
+    const port = Number(form.port)
+    if (!form.name.trim()) return fail(t('errName'))
+    if (!/^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/.test(form.host.trim())) return fail(t('errHost'))
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return fail(t('errPort'))
+    if (!/^[A-Za-z0-9._$@-]{1,64}$/.test(form.username)) return fail(t('errUser'))
+    if (form.auth === 'key' && !form.keyPath) return fail(t('errKey'))
+    return {
+      id: form.id,
+      name: form.name.trim(),
+      host: form.host.trim(),
+      port,
+      username: form.username,
+      auth: form.auth,
+      keyPath: form.auth === 'key' ? form.keyPath : undefined,
+      secret: form.auth === 'agent' || form.clearSecret ? '' : form.secret || undefined
+    }
+  }
+
+  // Prueba el acceso sin abrir el terminal ni guardar nada
+  const test = async (): Promise<void> => {
+    const input = buildInput()
+    if (!input) return
+    setError('')
+    setTestResult(null)
+    setTesting(true)
+    try {
+      setTestResult(await window.api.testSsh(input))
+    } catch (err) {
+      setTestResult({ level: 'error', message: errMsg(err) })
+    } finally {
+      setTesting(false)
+    }
+  }
+
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    const port = Number(form.port)
-    if (!form.name.trim()) return setError(t('errName'))
-    if (!/^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/.test(form.host.trim())) return setError(t('errHost'))
-    if (!Number.isInteger(port) || port < 1 || port > 65535) return setError(t('errPort'))
-    if (!/^[A-Za-z0-9._$@-]{1,64}$/.test(form.username)) return setError(t('errUser'))
-    if (form.auth === 'key' && !form.keyPath) return setError(t('errKey'))
+    const input = buildInput()
+    if (!input) return
     try {
-      const saved = await window.api.saveSsh({
-        id: form.id,
-        name: form.name.trim(),
-        host: form.host.trim(),
-        port,
-        username: form.username,
-        auth: form.auth,
-        keyPath: form.auth === 'key' ? form.keyPath : undefined,
-        secret: form.auth === 'agent' || form.clearSecret ? '' : form.secret || undefined
-      })
+      const saved = await window.api.saveSsh(input)
       setConnections(saved)
       setForm(emptySsh)
+      setTestResult(null)
       setError('')
     } catch (err) {
       setError(errMsg(err))
@@ -254,7 +308,7 @@ function SshConnections(): React.JSX.Element {
         </ul>
       )}
 
-      <form className="panel-form" onSubmit={(e) => void submit(e)}>
+      <form id="ssh-form" className="panel-form" onSubmit={(e) => void submit(e)}>
         <h3>{form.id ? t('sshEdit') : t('sshNew')}</h3>
         <div className="row">
           <label className="field grow">
@@ -327,6 +381,7 @@ function SshConnections(): React.JSX.Element {
           <p className="hint">{t('sshAgentHint')}</p>
         )}
         {error && <div className="error">{error}</div>}
+        {testResult && <div className={`test-result t-${testResult.level}`}>{testResult.message}</div>}
         <div className="form-actions">
           {(form.id || form.name || form.host) && (
             <button
@@ -340,6 +395,9 @@ function SshConnections(): React.JSX.Element {
               {t('cancel')}
             </button>
           )}
+          <button type="button" className="btn" disabled={testing} onClick={() => void test()}>
+            {testing ? t('sshTesting') : t('sshTest')}
+          </button>
           <button type="submit" className="btn primary">
             {t('save')}
           </button>
@@ -594,8 +652,13 @@ export function Settings(): React.JSX.Element {
   // Desplazarse a la sección pedida (p. ej. «Nueva conexión SSH» desde la barra lateral)
   useEffect(() => {
     if (!anchor) return
-    const timer = setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }), 60)
-    useStore.setState({ settingsAnchor: null })
+    // El ancla se limpia DENTRO del temporizador: limpiarla antes cancelaría el desplazamiento
+    const timer = setTimeout(() => {
+      const el = document.getElementById(anchor)
+      el?.scrollIntoView({ block: 'start' })
+      el?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+      useStore.setState({ settingsAnchor: null })
+    }, 80)
     return () => clearTimeout(timer)
   }, [anchor])
 
@@ -604,6 +667,18 @@ export function Settings(): React.JSX.Element {
 
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [error, setError] = useState('')
+
+  // «Editar» desde el menú contextual de la barra lateral
+  const panelEdit = useStore((s) => s.editRequest)
+  useEffect(() => {
+    if (panelEdit?.kind !== 'panel') return
+    const p = manual.find((x) => x.id === panelEdit.id)
+    useStore.setState({ editRequest: null })
+    if (p) {
+      setDraft({ id: p.id, name: p.name, url: p.url, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+      setError('')
+    }
+  }, [panelEdit, manual])
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -660,7 +735,7 @@ export function Settings(): React.JSX.Element {
 
       <Provisioning />
 
-      <h2>{t('manualPanels')}</h2>
+      <h2 id="panels-section">{t('manualPanels')}</h2>
       <p className="hint">{t('manualPanelsHint')}</p>
 
       <ul className="settings-list">
@@ -687,7 +762,7 @@ export function Settings(): React.JSX.Element {
         ))}
       </ul>
 
-      <form className="panel-form" onSubmit={(e) => void submit(e)}>
+      <form id="panels-form" className="panel-form" onSubmit={(e) => void submit(e)}>
         <h3>{draft.id === null ? t('addPanel') : t('editPanel')}</h3>
         <label className="field">
           <span>{t('name')}</span>

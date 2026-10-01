@@ -85,7 +85,7 @@ export function friendlySshError(message: string, host: string, port: number, au
     return 'La clave está protegida: añade la frase de paso en la conexión'
   }
   if (m.includes('cannot parse privatekey') || m.includes('unsupported key format')) {
-    return 'No se pudo leer la clave. Si es un .ppk de PuTTY v3, conviértelo en PuTTYgen (Conversions → Export OpenSSH key) o carga la clave en Pageant y usa «Agente»'
+    return 'No se pudo leer la clave (formato no reconocido o archivo dañado). Se admiten OpenSSH, PEM y .ppk de PuTTY'
   }
   if (m.includes('host denied') || m.includes('host key') || m.includes('verification failed')) {
     return 'Huella del servidor rechazada'

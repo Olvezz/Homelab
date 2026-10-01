@@ -258,6 +258,17 @@ export class ViewManager {
     })
   }
 
+  // Cierra la sesión del sitio: borra cookies, almacenamiento y caché de la partición del panel
+  async clearData(panelId: string): Promise<void> {
+    const panel = this.panels.get(panelId)
+    if (!panel) return
+    const ses = session.fromPartition(`persist:svc-${panel.sessionId ?? panel.id}`)
+    await ses.clearStorageData()
+    await ses.clearCache()
+    const wc = this.entries.get(panelId)?.view.webContents
+    if (wc && !wc.isDestroyed()) wc.reload()
+  }
+
   // Pega el portapapeles en la vista cuando termine de cargar (p. ej. un comando en el shell del nodo).
   // No pulsa Enter: el usuario revisa lo pegado y lo ejecuta.
   pasteWhenReady(panelId: string, delayMs = 3500): void {

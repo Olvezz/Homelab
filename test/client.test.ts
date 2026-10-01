@@ -1,16 +1,17 @@
 import { X509Certificate } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import https from 'node:https'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { generate } from 'selfsigned'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CertMismatchError, HttpError, PveClient, probeCertificate } from '../src/main/pve/client'
 
-const dir = join(__dirname, 'fixtures')
-const key = readFileSync(join(dir, 'key.pem'))
-const cert = readFileSync(join(dir, 'cert.pem'))
+// Certificados autofirmados generados al ejecutar los tests: no se guarda ninguna clave en el repositorio
+const mine = await generate([{ name: 'commonName', value: 'pve-test' }], { keySize: 2048 })
+const theirs = await generate([{ name: 'commonName', value: 'otro' }], { keySize: 2048 })
+const key = mine.private
+const cert = mine.cert
 const fingerprint = new X509Certificate(cert).fingerprint256
-const otherFingerprint = new X509Certificate(readFileSync(join(dir, 'cert2.pem'))).fingerprint256
+const otherFingerprint = new X509Certificate(theirs.cert).fingerprint256
 
 const SECRET = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const seen: { method?: string; url?: string; auth?: string; body?: string }[] = []

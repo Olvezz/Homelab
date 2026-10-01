@@ -29,6 +29,9 @@ export const IPC = {
   sshImportPutty: 'ssh:import-putty',
   sshPickKey: 'ssh:pick-key',
   sshOpen: 'ssh:open',
+  sshTest: 'ssh:test',
+  panelOpenUrl: 'panel:open-url',
+  panelClearData: 'panel:clear-data',
   sshInput: 'ssh:input',
   sshResize: 'ssh:resize',
   sshClose: 'ssh:close',
@@ -200,6 +203,12 @@ export interface SshConnectionInput {
   secret?: string // undefined = conservar el guardado; '' = borrarlo
 }
 
+export interface SshTestResult {
+  level: 'ok' | 'warn' | 'error'
+  message: string
+  fingerprint?: string
+}
+
 export type SshState = 'connecting' | 'open' | 'closed' | 'error'
 
 export interface SshSession {
@@ -320,6 +329,9 @@ export interface Api {
   deleteSsh(id: string): Promise<SshConnection[]>
   importPutty(): Promise<{ added: number; connections: SshConnection[] }>
   pickSshKey(): Promise<string | null>
+  testSsh(input: SshConnectionInput): Promise<SshTestResult>
+  openPanelUrl(url: string): Promise<void>
+  clearPanelData(panelId: string): Promise<void>
   openSsh(connId: string, cols: number, rows: number, secret?: string): Promise<SshSession>
   sshInput(id: string, data: string): Promise<void>
   resizeSsh(id: string, cols: number, rows: number): Promise<void>

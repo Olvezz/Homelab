@@ -1238,3 +1238,21 @@ textarea.code {
 .form-actions.left {
   justify-content: flex-start;
 }
+
+.test-result {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.test-result.t-ok {
+  color: var(--success);
+}
+
+.test-result.t-warn {
+  color: var(--warn);
+}
+
+.test-result.t-error {
+  color: var(--danger);
+}

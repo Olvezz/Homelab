@@ -1,10 +1,11 @@
 import { generateKeyPairSync } from 'node:crypto'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Server } from 'ssh2'
+import { Server, utils, type ParsedKey } from 'ssh2'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { ed25519Key, rsaKey, writePpk } from './helpers/ppk-writer'
 
 const logDir = mkdtempSync(join(tmpdir(), 'hl-ssh-'))
 vi.mock('electron', () => ({
@@ -17,19 +18,26 @@ vi.mock('electron', () => ({
 }))
 
 const { SshManager } = await import('../src/main/ssh/manager')
+const { ppkToOpenSsh: ppkToOpenSshSync } = await import('../src/main/ssh/ppk')
 
 const CH = { data: 'data', state: 'state', hostPrompt: 'prompt' }
 const hostKey = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs1', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } }).privateKey
 
 let server: Server
 let port = 0
+// Clave pública autorizada para el login por clave (la fija cada test)
+let allowedKey: ParsedKey | null = null
 
 beforeAll(async () => {
   server = new Server({ hostKeys: [hostKey] }, (client) => {
     client.on('error', () => undefined) // el cliente rechaza la huella a propósito en algunos tests
     client.on('authentication', (ctx) => {
       if (ctx.method === 'password' && ctx.username === 'tester' && ctx.password === 's3cret') ctx.accept()
-      else ctx.reject(['password'])
+      else if (ctx.method === 'publickey' && ctx.username === 'tester' && allowedKey && ctx.key.data.equals(allowedKey.getPublicSSH())) {
+        if (!ctx.signature) ctx.accept() // consulta previa de la clave
+        else if (allowedKey.verify(ctx.blob as Buffer, ctx.signature, ctx.hashAlgo) === true) ctx.accept()
+        else ctx.reject()
+      } else ctx.reject(['password', 'publickey'])
     })
     client.on('ready', () => {
       client.on('session', (accept) => {
@@ -195,5 +203,105 @@ describe('SshManager contra un servidor SSH local', () => {
     expect(JSON.stringify(list)).not.toContain('secretEnc')
     expect(nuevo.hasSecret).toBe(false) // sin cifrado disponible nunca se guarda en claro
     expect(h.mgr.delete(nuevo.id)).toHaveLength(1)
+  })
+})
+
+describe('Probar conexión', () => {
+  const input = (over: Record<string, unknown> = {}): Parameters<InstanceType<typeof SshManager>['test']>[0] =>
+    ({ name: 'T', host: '127.0.0.1', port, username: 'tester', auth: 'password', secret: 's3cret', ...over }) as never
+
+  it('servidor desconocido: enseña la huella y NO envía la contraseña', async () => {
+    const h = harness()
+    const r = await h.mgr.test(input())
+    expect(r.level).toBe('warn')
+    expect(r.fingerprint).toMatch(/^SHA256:/)
+    expect(r.message).toContain('primera vez')
+    expect(h.config.sshHostKeys).toEqual({}) // probar no guarda la huella
+  })
+
+  it('huella conocida y contraseña correcta: correcto', async () => {
+    const h = harness()
+    const first = await h.mgr.test(input())
+    h.config.sshHostKeys[`127.0.0.1:${port}`] = first.fingerprint!
+    const r = await h.mgr.test(input())
+    expect(r.level).toBe('ok')
+    expect(r.message).toContain('acepta el acceso')
+  })
+
+  it('huella conocida y contraseña incorrecta: autenticación rechazada', async () => {
+    const h = harness()
+    const first = await h.mgr.test(input())
+    h.config.sshHostKeys[`127.0.0.1:${port}`] = first.fingerprint!
+    const r = await h.mgr.test(input({ secret: 'mala' }))
+    expect(r.level).toBe('error')
+    expect(r.message).toContain('Autenticación rechazada')
+  })
+
+  it('huella distinta a la guardada: error y no autentica', async () => {
+    const h = harness()
+    h.config.sshHostKeys[`127.0.0.1:${port}`] = 'SHA256:otra'
+    const r = await h.mgr.test(input())
+    expect(r.level).toBe('error')
+    expect(r.message).toContain('cambió')
+  })
+
+  it('sin contraseña avisa; puerto cerrado da error de red', async () => {
+    const h = harness()
+    expect((await h.mgr.test(input({ secret: undefined }))).level).toBe('warn')
+    const r = await h.mgr.test(input({ port: 1 }))
+    expect(r.level).toBe('error')
+  })
+})
+
+describe('Acceso con clave .ppk de PuTTY', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hl-ppk-'))
+
+  async function prepared(key: ReturnType<typeof ed25519Key>, version: 2 | 3, passphrase?: string): Promise<{ h: Harness; input: Record<string, unknown> }> {
+    const file = join(dir, `k-${Math.random().toString(36).slice(2)}.ppk`)
+    writeFileSync(file, writePpk(key, { version, passphrase }))
+    const { ppkToOpenSsh } = await import('../src/main/ssh/ppk')
+    const parsed = utils.parseKey(ppkToOpenSsh(readFileSync(file, 'utf8'), passphrase).pem)
+    allowedKey = Array.isArray(parsed) ? parsed[0] : (parsed as ParsedKey)
+    const h = harness('key')
+    h.config.ssh[0].keyPath = file
+    // huella del servidor ya confirmada
+    const first = await h.mgr.test({ name: 'T', host: '127.0.0.1', port, username: 'tester', auth: 'key', keyPath: file, secret: passphrase } as never)
+    h.config.sshHostKeys[`127.0.0.1:${port}`] = first.fingerprint!
+    return { h, input: { name: 'T', host: '127.0.0.1', port, username: 'tester', auth: 'key', keyPath: file, secret: passphrase } }
+  }
+
+  it('ed25519 v3 con frase de paso: probar y abrir sesión', async () => {
+    const { h, input } = await prepared(ed25519Key(true), 3, 'mi frase')
+    expect((await h.mgr.test(input as never)).level).toBe('ok')
+    const s = await h.mgr.open('ssh-test', 80, 24, 'mi frase')
+    await waitFor(() => lastState(h)?.state === 'open')
+    h.mgr.close(s.id)
+  })
+
+  it('RSA v2 sin frase de paso', async () => {
+    const { h, input } = await prepared(rsaKey(), 2)
+    expect((await h.mgr.test(input as never)).level).toBe('ok')
+  })
+
+  it('frase de paso incorrecta o ausente: mensaje claro, sin intentar conectar', async () => {
+    const { h, input } = await prepared(ed25519Key(true), 3, 'buena')
+    const bad = await h.mgr.test({ ...input, secret: 'mala' } as never)
+    expect(bad.level).toBe('error')
+    expect(bad.message).toContain('Frase de paso incorrecta')
+    const none = await h.mgr.test({ ...input, secret: undefined } as never)
+    expect(none.message).toContain('frase de paso')
+  })
+
+  it('una clave que el servidor no tiene autorizada: autenticación rechazada', async () => {
+    const { h, input } = await prepared(ed25519Key(true), 3)
+    allowedKey = (() => {
+      const other = utils.parseKey(
+        ppkToOpenSshSync(writePpk(ed25519Key(true), { version: 3 })).pem
+      )
+      return Array.isArray(other) ? other[0] : (other as ParsedKey)
+    })()
+    const r = await h.mgr.test(input as never)
+    expect(r.level).toBe('error')
+    expect(r.message).toContain('Autenticación rechazada')
   })
 })
