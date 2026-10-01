@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Panel } from '../../shared/types'
+import type { Panel, SshAuth } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -105,6 +105,246 @@ function Connection(): React.JSX.Element {
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+interface SshForm {
+  id?: string
+  name: string
+  host: string
+  port: string
+  username: string
+  auth: SshAuth
+  keyPath: string
+  secret: string
+  clearSecret: boolean
+  hasSecret: boolean
+}
+
+const emptySsh: SshForm = {
+  name: '',
+  host: '',
+  port: '22',
+  username: 'root',
+  auth: 'password',
+  keyPath: '',
+  secret: '',
+  clearSecret: false,
+  hasSecret: false
+}
+
+function SshConnections(): React.JSX.Element {
+  const connections = useStore((s) => s.sshConnections)
+  const setConnections = useStore((s) => s.setSshConnections)
+  const openSsh = useStore((s) => s.openSsh)
+  const askConfirm = useStore((s) => s.askConfirm)
+  const showToast = useStore((s) => s.showToast)
+  const draft = useStore((s) => s.sshDraft)
+  const [form, setForm] = useState<SshForm>(emptySsh)
+  const [error, setError] = useState('')
+
+  // Conexión nueva con los datos de un guest (menú contextual → Abrir SSH)
+  useEffect(() => {
+    if (!draft) return
+    setForm({ ...emptySsh, ...draft, port: String(draft.port ?? 22), keyPath: draft.keyPath ?? '', secret: '' } as SshForm)
+    useStore.setState({ sshDraft: null })
+  }, [draft])
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    const port = Number(form.port)
+    if (!form.name.trim()) return setError(t('errName'))
+    if (!/^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/.test(form.host.trim())) return setError(t('errHost'))
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return setError(t('errPort'))
+    if (!/^[A-Za-z0-9._$@-]{1,64}$/.test(form.username)) return setError(t('errUser'))
+    if (form.auth === 'key' && !form.keyPath) return setError(t('errKey'))
+    try {
+      const saved = await window.api.saveSsh({
+        id: form.id,
+        name: form.name.trim(),
+        host: form.host.trim(),
+        port,
+        username: form.username,
+        auth: form.auth,
+        keyPath: form.auth === 'key' ? form.keyPath : undefined,
+        secret: form.auth === 'agent' || form.clearSecret ? '' : form.secret || undefined
+      })
+      setConnections(saved)
+      setForm(emptySsh)
+      setError('')
+    } catch (err) {
+      setError(errMsg(err))
+    }
+  }
+
+  const remove = (id: string, name: string): void =>
+    askConfirm({
+      title: t('sshDeleteTitle', { name }),
+      body: t('sshDeleteBody'),
+      confirmLabel: t('remove'),
+      danger: true,
+      onConfirm: () => void window.api.deleteSsh(id).then(setConnections)
+    })
+
+  const importFromPutty = async (): Promise<void> => {
+    try {
+      const r = await window.api.importPutty()
+      setConnections(r.connections)
+      showToast(r.added > 0 ? 'ok' : 'info', r.added > 0 ? t('sshImported', { n: r.added }) : t('sshImportNone'))
+    } catch (err) {
+      setError(errMsg(err))
+    }
+  }
+
+  const authLabel: Record<SshAuth, string> = {
+    password: t('sshAuthPassword'),
+    key: t('sshAuthKey'),
+    agent: t('sshAuthAgent')
+  }
+
+  return (
+    <>
+      <h2 id="ssh-section">{t('sshConnections')}</h2>
+      <p className="hint">{t('sshHint')}</p>
+      <div className="form-actions spaced wrap left">
+        <button className="btn" onClick={() => void importFromPutty()}>
+          {t('sshImport')}
+        </button>
+      </div>
+      {connections.length > 0 && (
+        <ul className="settings-list">
+          {connections.map((c) => (
+            <li key={c.id}>
+              <span className="panel-icon">
+                <Icon k="ui:terminal" />
+              </span>
+              <span className="settings-name">{c.name}</span>
+              <span className="settings-url">
+                {c.username}@{c.host}:{c.port} · {authLabel[c.auth]}
+              </span>
+              <button className="btn small" onClick={() => void openSsh(c.id)}>
+                {t('sshConnect')}
+              </button>
+              <button
+                className="btn small"
+                onClick={() => {
+                  setForm({
+                    id: c.id,
+                    name: c.name,
+                    host: c.host,
+                    port: String(c.port),
+                    username: c.username,
+                    auth: c.auth,
+                    keyPath: c.keyPath ?? '',
+                    secret: '',
+                    clearSecret: false,
+                    hasSecret: c.hasSecret
+                  })
+                  setError('')
+                }}
+              >
+                {t('edit')}
+              </button>
+              <button className="btn small danger" onClick={() => remove(c.id, c.name)}>
+                {t('remove')}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form className="panel-form" onSubmit={(e) => void submit(e)}>
+        <h3>{form.id ? t('sshEdit') : t('sshNew')}</h3>
+        <div className="row">
+          <label className="field grow">
+            <span>{t('name')}</span>
+            <input value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+        </div>
+        <div className="row">
+          <label className="field grow">
+            <span>{t('sshFieldHost')}</span>
+            <input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+          </label>
+          <label className="field port">
+            <span>{t('wizardPort')}</span>
+            <input value={form.port} inputMode="numeric" onChange={(e) => setForm({ ...form, port: e.target.value })} />
+          </label>
+          <label className="field grow">
+            <span>{t('sshFieldUser')}</span>
+            <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+          </label>
+        </div>
+        <label className="field">
+          <span>{t('sshAuth')}</span>
+          <select value={form.auth} onChange={(e) => setForm({ ...form, auth: e.target.value as SshAuth, secret: '' })}>
+            <option value="password">{t('sshAuthPassword')}</option>
+            <option value="key">{t('sshAuthKey')}</option>
+            <option value="agent">{t('sshAuthAgent')}</option>
+          </select>
+        </label>
+        {form.auth === 'key' && (
+          <label className="field">
+            <span>{t('sshKeyFile')}</span>
+            <div className="icon-pick">
+              <input value={form.keyPath} onChange={(e) => setForm({ ...form, keyPath: e.target.value })} spellCheck={false} />
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void window.api.pickSshKey().then((p) => p && setForm({ ...form, keyPath: p }))}
+              >
+                {t('sshKeyChoose')}
+              </button>
+            </div>
+          </label>
+        )}
+        {form.auth !== 'agent' ? (
+          <>
+            <label className="field">
+              <span>{form.auth === 'key' ? t('sshPassphrase') : t('sshSecretOptional')}</span>
+              <input
+                type="password"
+                value={form.secret}
+                autoComplete="off"
+                placeholder={form.hasSecret && !form.clearSecret ? t('sshSecretStored') : ''}
+                onChange={(e) => setForm({ ...form, secret: e.target.value })}
+              />
+            </label>
+            {form.hasSecret && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={form.clearSecret}
+                  onChange={(e) => setForm({ ...form, clearSecret: e.target.checked })}
+                />
+                <span>{t('sshClearSecret')}</span>
+              </label>
+            )}
+            <p className="hint">{t('wizardSecretNote')}</p>
+          </>
+        ) : (
+          <p className="hint">{t('sshAgentHint')}</p>
+        )}
+        {error && <div className="error">{error}</div>}
+        <div className="form-actions">
+          {(form.id || form.name || form.host) && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setForm(emptySsh)
+                setError('')
+              }}
+            >
+              {t('cancel')}
+            </button>
+          )}
+          <button type="submit" className="btn primary">
+            {t('save')}
+          </button>
+        </div>
+      </form>
     </>
   )
 }
@@ -349,6 +589,15 @@ export function Settings(): React.JSX.Element {
   const setUi = useStore((s) => s.setUi)
   const saveManualPanels = useStore((s) => s.saveManualPanels)
   const closeSettings = useStore((s) => s.closeSettings)
+  const anchor = useStore((s) => s.settingsAnchor)
+
+  // Desplazarse a la sección pedida (p. ej. «Nueva conexión SSH» desde la barra lateral)
+  useEffect(() => {
+    if (!anchor) return
+    const timer = setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }), 60)
+    useStore.setState({ settingsAnchor: null })
+    return () => clearTimeout(timer)
+  }, [anchor])
 
   // Solo los manuales son editables: los descubiertos viven en las notas de Proxmox
   const manual = panels.filter((p) => p.source === 'manual' && p.kind !== 'tab')
@@ -406,6 +655,8 @@ export function Settings(): React.JSX.Element {
       <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
 
       <Updates />
+
+      <SshConnections />
 
       <Provisioning />
 

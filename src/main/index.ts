@@ -10,6 +10,7 @@ import { log } from './log'
 import { PanelHub } from './panelHub'
 import { PveService } from './pve/service'
 import { CertTrust } from './security/certTrust'
+import { SshManager } from './ssh/manager'
 import { Updater } from './updater'
 import { ViewManager } from './viewManager'
 
@@ -21,6 +22,8 @@ if (!gotLock) app.quit()
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+// Con un terminal SSH enfocado, los atajos de la app (Ctrl+R, Ctrl+K, Ctrl+B, Ctrl+1..9) pasan al shell
+let terminalActive = false
 
 // CSP estricta para la UI propia. En desarrollo Vite necesita scripts inline y websocket (HMR).
 function applyCsp(): void {
@@ -85,7 +88,7 @@ function createWindow(store: ConfigStore): void {
         window.setFullScreen(!window.isFullScreen())
         return
       }
-      if (!input.control || input.alt || input.meta) return
+      if (terminalActive || !input.control || input.alt || input.meta) return
       if (key === 'r') {
         event.preventDefault()
         if (input.shift) service.refresh()
@@ -144,7 +147,22 @@ function createWindow(store: ConfigStore): void {
       quitting = true // la actualización cierra la app de verdad, sin mandarla a la bandeja
     }
   )
-  registerIpc({ win: window, store, views, trust, service, hub, onUiChange, onNativeTheme, updater })
+  const ssh = new SshManager(store, send, { data: IPC.sshData, state: IPC.sshState, hostPrompt: IPC.sshHostPrompt })
+  registerIpc({
+    win: window,
+    store,
+    views,
+    trust,
+    service,
+    hub,
+    onUiChange,
+    onNativeTheme,
+    updater,
+    ssh,
+    setTerminalFocus: (on) => {
+      terminalActive = on
+    }
+  })
   applyLoginItem(ui.startWithWindows)
   nativeTheme.themeSource = ui.theme === 'light' ? 'light' : 'dark'
 
@@ -179,6 +197,7 @@ function createWindow(store: ConfigStore): void {
     win = null
     service.stop()
     updater.stop()
+    ssh.closeAll()
   })
 
   createTray(

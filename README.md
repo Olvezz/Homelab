@@ -84,6 +84,26 @@ La app usa los temas de [ProxMorph](https://github.com/IT-BAER/proxmorph), el mi
 
 Cualquier URL `http(s)` sirve: Ajustes → Añadir panel (p. ej. `https://vault.bitwarden.com/#/vault`). Cada panel guarda su sesión aparte. Limitaciones: los enlaces a otros orígenes (p. ej. un SSO externo) se abren en el navegador, y solo se permite el permiso de escribir en el portapapeles (copiar contraseñas); cámara, micrófono, ubicación y demás siguen denegados.
 
+## SSH integrado (reemplazo de PuTTY)
+
+Terminal SSH dentro de la app, con varias sesiones a la vez (barra lateral → *SSH* y *Sesiones SSH*; `Ctrl+K` también las encuentra).
+
+- **Conexiones:** Ajustes → *Conexiones SSH*, o el botón **+** de la barra lateral, o clic derecho en un guest → *Abrir SSH* (rellena la IP). Acceso por **contraseña** (guardada cifrada con Windows, o se pide al conectar), **clave privada** (archivo OpenSSH/PEM o `.ppk` v2, con frase de paso opcional) o **agente** (Pageant / agente de OpenSSH de Windows).
+- **Importar de PuTTY:** lee tus sesiones guardadas (host, puerto, usuario, clave) del registro de Windows sin modificar nada de PuTTY. Los `.ppk` v3 (el formato actual de PuTTYgen) no se pueden leer directamente: conviértelos con PuTTYgen (*Conversions → Export OpenSSH key*) o cárgalos en Pageant y usa *Agente*.
+- **Huella del servidor:** se confirma la primera vez (como el `known_hosts` de OpenSSH) y se avisa con énfasis si cambia.
+- **Como PuTTY:** seleccionar copia, clic derecho pega (`Ctrl+Shift+V` también). Con un terminal delante, los atajos de la app (`Ctrl+R`, `Ctrl+K`, `Ctrl+B`, `Ctrl+1..9`) pasan al shell.
+
+## Arranque automático de guests nuevos
+
+Ajustes → *Arranque de guests nuevos*. Cada VM o LXC **nuevo** se actualiza y recibe los paquetes base solo (curl, nano, htop, sudo y, en VM, qemu-guest-agent). Editas el script en la app y lo instalas **una sola vez** en el nodo:
+
+1. Pulsa **Abrir shell del nodo y pegar**: abre el shell de Proxmox (hace falta sesión de root@pam) y pega el instalador sin ejecutarlo. También puedes **Copiar comando de instalación** y pegarlo tú.
+2. Revisa lo pegado y pulsa Enter.
+
+Qué instala: un temporizador de systemd (`homelab-provision.timer`, cada minuto) que detecta guests nuevos y les ejecuta el script (`pct exec` en LXC; `qm guest exec` en VM con qemu-guest-agent). Los guests que ya existían al instalar quedan como *baseline* y **no se tocan**; las plantillas y las VM Windows tampoco. Cada guest se prepara una vez (hasta 5 reintentos). Logs: `/var/log/homelab-provision/`. Para quitarlo: *Copiar comando para quitarlo*.
+
+La app nunca ejecuta nada en el nodo por su cuenta: solo genera el comando que tú pegas. Para las VM, lo ideal es llevar qemu-guest-agent ya en tu plantilla y activar *Options → QEMU Guest Agent*.
+
 ## Iconos
 
 Todos los iconos son SVG monocromos que toman el color del tema (logos de [Simple Icons](https://simpleicons.org), CC0, e iconos de interfaz de [Lucide](https://lucide.dev)). Se asignan solos, sin emojis:
@@ -115,6 +135,7 @@ Todos los iconos son SVG monocromos que toman el color del tema (logos de [Simpl
 ## Seguridad
 
 - `contextIsolation`, `sandbox` y sin `nodeIntegration` en todas las vistas; CSP estricta en la UI propia.
+- SSH: huellas de servidor confirmadas (TOFU), secretos cifrados con DPAPI y nunca en claro; el terminal solo recibe/envía bytes.
 - IPC validado con `zod` y limitado al frame principal de la ventana; lista blanca de acciones.
 - Las notas y tags de Proxmox son datos no confiables: se parsean con lista blanca y nunca se inyectan como HTML.
 - Permisos del navegador (cámara, micrófono, ubicación…) denegados; enlaces a otros orígenes se abren en el navegador externo.

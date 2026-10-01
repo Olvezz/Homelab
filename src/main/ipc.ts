@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, ipcMain } from 'electron'
+import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
 import {
   COLLAPSED_SIDEBAR_WIDTH,
@@ -20,13 +20,15 @@ import {
   nativeThemeSchema,
   navSchema,
   portSchema,
-  powerActionSchema
+  powerActionSchema,
+  sshConnectionSchema
 } from './ipcSchemas'
 import type { PanelHub } from './panelHub'
 import { buildHostInstaller, DEFAULT_GUEST_SCRIPT, UNINSTALL_COMMAND, validateGuestScript } from './provision'
 import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
+import type { SshManager } from './ssh/manager'
 import type { Updater } from './updater'
 import type { ViewManager } from './viewManager'
 
@@ -40,9 +42,11 @@ interface Deps {
   onUiChange: (patch: Partial<UiConfig>) => void
   onNativeTheme: (mode: 'dark' | 'light') => void
   updater: Updater
+  ssh: SshManager
+  setTerminalFocus: (on: boolean) => void
 }
 
-export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater }: Deps): void {
+export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, setTerminalFocus }: Deps): void {
   // Solo la UI propia (frame principal de la ventana) puede hablar con el main; nunca una vista remota
   const handle = (channel: string, fn: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
@@ -126,8 +130,50 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
   })
 
   handle(IPC.copyText, (raw) => {
-    clipboard.writeText(z.string().max(4000).parse(raw))
+    clipboard.writeText(z.string().max(200000).parse(raw))
   })
+
+  // ---- SSH ----
+  handle(IPC.sshList, () => ssh.list())
+  handle(IPC.sshSave, (raw) => ssh.save(sshConnectionSchema.parse(raw)))
+  handle(IPC.sshDelete, (raw) => ssh.delete(z.string().regex(/^ssh-[a-z0-9-]{1,40}$/).parse(raw)))
+  handle(IPC.sshImportPutty, () => ssh.importPutty())
+  handle(IPC.sshPickKey, async () => {
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Clave privada SSH',
+      properties: ['openFile', 'showHiddenFiles'],
+      filters: [
+        { name: 'Claves SSH (OpenSSH, PEM, PuTTY .ppk)', extensions: ['*'] }
+      ]
+    })
+    return r.canceled ? null : (r.filePaths[0] ?? null)
+  })
+  handle(IPC.sshOpen, (...raw) => {
+    const [connId, cols, rows, secret] = z
+      .tuple([
+        z.string().regex(/^ssh-[a-z0-9-]{1,40}$/),
+        z.number().int().min(1).max(1000),
+        z.number().int().min(1).max(1000),
+        z.string().max(1000).optional()
+      ])
+      .parse(raw)
+    return ssh.open(connId, cols, rows, secret)
+  })
+  handle(IPC.sshInput, (...raw) => {
+    const [id, data] = z.tuple([z.string().uuid(), z.string().max(200000)]).parse(raw)
+    ssh.input(id, data)
+  })
+  handle(IPC.sshResize, (...raw) => {
+    const [id, cols, rows] = z.tuple([z.string().uuid(), z.number().int().min(1).max(1000), z.number().int().min(1).max(1000)]).parse(raw)
+    ssh.resize(id, cols, rows)
+  })
+  handle(IPC.sshClose, (raw) => ssh.close(z.string().uuid().parse(raw)))
+  handle(IPC.sshDecideHost, (...raw) => {
+    const [id, accept] = z.tuple([z.string().uuid(), z.boolean()]).parse(raw)
+    ssh.decideHost(id, accept)
+  })
+  handle(IPC.terminalFocus, (raw) => setTerminalFocus(z.boolean().parse(raw)))
+  handle(IPC.clipboardRead, async () => (await clipboard.readText()).slice(0, 200000))
 
   handle(IPC.updateGet, () => updater.getStatus())
   handle(IPC.updateCheck, () => updater.check())

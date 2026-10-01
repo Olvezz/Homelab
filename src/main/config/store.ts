@@ -76,6 +76,17 @@ const lenientPanels = z.unknown().transform((raw): Panel[] => {
   return out
 })
 
+const sshConnSchema = z.object({
+  id: z.string().regex(/^ssh-[a-z0-9-]{1,40}$/),
+  name: z.string().trim().min(1).max(60),
+  host: hostSchema,
+  port: portSchema,
+  username: z.string().regex(/^[A-Za-z0-9._$@-]{1,64}$/),
+  auth: z.enum(['password', 'key', 'agent']),
+  keyPath: z.string().max(500).optional(),
+  secretEnc: z.string().nullable() // base64 (safeStorage); null = se pide al conectar
+})
+
 const configSchema = z.object({
   // Versión de la app que escribió el archivo por última vez (para copias de seguridad al actualizar)
   appVersion: z.string().optional().catch(undefined),
@@ -98,6 +109,9 @@ const configSchema = z.object({
   pve: pveSchema.nullable().catch(null),
   // Orígenes fuera de rangos privados que el usuario aprobó para paneles descubiertos
   approvedExternal: z.array(z.string()).catch([]),
+  // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
+  ssh: z.array(sshConnSchema).max(200).catch([]),
+  sshHostKeys: z.record(z.string(), z.string()).catch({}),
   // Script que se ejecuta en cada guest nuevo (null = el predeterminado de la app)
   provisionScript: z.string().max(20000).nullable().catch(null)
 })
@@ -128,7 +142,7 @@ export class ConfigStore {
     const parsed = configSchema.safeParse(raw)
     this.data = parsed.success
       ? parsed.data
-      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null }
+      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ssh: [], sshHostKeys: {} }
 
     // Al cambiar de versión se guarda una copia del archivo anterior; los datos viven en
     // %APPDATA%, fuera de la carpeta de la app, así que instalar encima no los toca.

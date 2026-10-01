@@ -23,6 +23,18 @@ export const IPC = {
   pveOpenInPve: 'pve:open-in-pve',
   pveApproveExternal: 'pve:approve-external',
   setNativeTheme: 'theme:native',
+  sshList: 'ssh:list',
+  sshSave: 'ssh:save',
+  sshDelete: 'ssh:delete',
+  sshImportPutty: 'ssh:import-putty',
+  sshPickKey: 'ssh:pick-key',
+  sshOpen: 'ssh:open',
+  sshInput: 'ssh:input',
+  sshResize: 'ssh:resize',
+  sshClose: 'ssh:close',
+  sshDecideHost: 'ssh:decide-host',
+  terminalFocus: 'terminal:focus',
+  clipboardRead: 'clipboard:read',
   provisionGet: 'provision:get',
   provisionSave: 'provision:save',
   provisionCopy: 'provision:copy',
@@ -39,6 +51,9 @@ export const IPC = {
   toast: 'toast',
   themeCookie: 'theme:cookie',
   updateStatus: 'update:status',
+  sshData: 'ssh:data',
+  sshState: 'ssh:state',
+  sshHostPrompt: 'ssh:host-prompt',
   shortcut: 'shortcut'
 } as const
 
@@ -161,6 +176,60 @@ export interface UpdateStatus {
   checkedAt?: number
 }
 
+export type SshAuth = 'password' | 'key' | 'agent'
+
+export interface SshConnection {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  auth: SshAuth
+  keyPath?: string // archivo de clave privada (OpenSSH/PEM o .ppk v2)
+  hasSecret: boolean // contraseña o frase de paso guardada (cifrada)
+}
+
+export interface SshConnectionInput {
+  id?: string // sin id = conexión nueva
+  name: string
+  host: string
+  port: number
+  username: string
+  auth: SshAuth
+  keyPath?: string
+  secret?: string // undefined = conservar el guardado; '' = borrarlo
+}
+
+export type SshState = 'connecting' | 'open' | 'closed' | 'error'
+
+export interface SshSession {
+  id: string
+  connId: string
+  name: string
+  state: SshState
+  message?: string
+}
+
+export interface SshStateEvent {
+  id: string
+  state: SshState
+  message?: string
+}
+
+export interface SshDataEvent {
+  id: string
+  data: Uint8Array
+}
+
+export interface SshHostPromptInfo {
+  sessionId: string
+  host: string
+  port: number
+  keyType: string
+  fingerprint: string // SHA256:…
+  previous?: string // huella guardada si ya había una distinta
+}
+
 export interface ProvisionView {
   script: string // script que se ejecuta dentro de cada guest nuevo
   isDefault: boolean
@@ -246,6 +315,21 @@ export interface Api {
   onPanels(cb: (panels: Panel[]) => void): () => void
   onSnapshot(cb: (snapshot: PveSnapshot) => void): () => void
   setNativeTheme(mode: 'dark' | 'light'): Promise<void>
+  listSsh(): Promise<SshConnection[]>
+  saveSsh(input: SshConnectionInput): Promise<SshConnection[]>
+  deleteSsh(id: string): Promise<SshConnection[]>
+  importPutty(): Promise<{ added: number; connections: SshConnection[] }>
+  pickSshKey(): Promise<string | null>
+  openSsh(connId: string, cols: number, rows: number, secret?: string): Promise<SshSession>
+  sshInput(id: string, data: string): Promise<void>
+  resizeSsh(id: string, cols: number, rows: number): Promise<void>
+  closeSsh(id: string): Promise<void>
+  decideSshHost(id: string, accept: boolean): Promise<void>
+  setTerminalFocus(on: boolean): Promise<void>
+  readClipboard(): Promise<string>
+  onSshData(cb: (event: SshDataEvent) => void): () => void
+  onSshState(cb: (event: SshStateEvent) => void): () => void
+  onSshHostPrompt(cb: (info: SshHostPromptInfo) => void): () => void
   getProvision(): Promise<ProvisionView>
   saveProvision(script: string | null): Promise<void> // null = restaurar el predeterminado
   copyProvisionInstaller(): Promise<void>

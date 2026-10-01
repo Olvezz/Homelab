@@ -7,6 +7,10 @@ import {
   type PowerAction,
   type PveConfigView,
   type PveSnapshot,
+  type SshConnection,
+  type SshConnectionInput,
+  type SshHostPromptInfo,
+  type SshSession,
   type Shortcut,
   type ToastMessage,
   type UiConfig,
@@ -14,8 +18,9 @@ import {
   type ViewState
 } from '../shared/types'
 import { errMsg, t } from './i18n'
+import { pushData } from './sshBus'
 
-export type Page = 'view' | 'settings' | 'wizard'
+export type Page = 'view' | 'settings' | 'wizard' | 'ssh'
 
 export interface ConfirmState {
   title: string
@@ -42,10 +47,17 @@ interface State {
   menu: { guest: Guest; x: number; y: number } | null
   searchOpen: boolean
   expanded: Record<string, boolean>
+  sshConnections: SshConnection[]
+  sshSessions: SshSession[]
+  activeSshId: string | null
+  sshHostQueue: SshHostPromptInfo[]
+  sshSecretPrompt: { connId: string; name: string } | null
+  sshDraft: Partial<SshConnectionInput> | null // conexión nueva con datos de un guest
+  settingsAnchor: string | null // sección de Ajustes a la que desplazarse al abrir
 
   init: () => Promise<void>
   selectPanel: (id: string) => void
-  openSettings: () => void
+  openSettings: (anchor?: string) => void
   closeSettings: () => void
   openWizard: () => void
   closeWizard: () => void
@@ -61,6 +73,15 @@ interface State {
   closeMenu: () => void
   setSearch: (open: boolean) => void
   toggleExpand: (key: string) => void
+  setSshConnections: (connections: SshConnection[]) => void
+  openSsh: (connId: string, secret?: string) => Promise<void>
+  selectSsh: (id: string) => void
+  closeSsh: (id: string) => void
+  reconnectSsh: (session: SshSession) => Promise<void>
+  answerSshHost: (accept: boolean) => void
+  submitSshSecret: (secret: string) => void
+  cancelSshSecret: () => void
+  openSshForGuest: (guest: Guest) => Promise<void>
   runAction: (guest: Guest, action: PowerAction) => void
   openConsole: (guest: Guest) => Promise<void>
   openInPve: (guest: Guest) => Promise<void>
@@ -99,6 +120,8 @@ export function resolvePanel(panels: Panel[], p: Panel): Panel {
 
 export const listedPanels = (panels: Panel[]): Panel[] => panels.filter((p) => p.kind !== 'tab')
 
+const earlySshState = new Map<string, { id: string; state: SshSession['state']; message?: string }>()
+
 let userPicked = false
 let wantedId: string | undefined
 let listening = false
@@ -120,6 +143,13 @@ export const useStore = create<State>((set, get) => ({
   menu: null,
   searchOpen: false,
   expanded: {},
+  sshConnections: [],
+  sshSessions: [],
+  activeSshId: null,
+  sshHostQueue: [],
+  sshSecretPrompt: null,
+  sshDraft: null,
+  settingsAnchor: null,
 
   init: async () => {
     const { panels, ui, pve, snapshot, themeCookie } = await window.api.getConfig()
@@ -157,6 +187,18 @@ export const useStore = create<State>((set, get) => ({
         }
       })
       window.api.onThemeCookie((value) => set({ themeCookie: value }))
+      window.api.onSshData((e) => pushData(e.id, e.data))
+      window.api.onSshState((e) => {
+        if (!get().sshSessions.some((s) => s.id === e.id)) {
+          earlySshState.set(e.id, e) // el estado puede llegar antes de que la sesión se añada
+          return
+        }
+        set((s) => ({
+          sshSessions: s.sshSessions.map((x) => (x.id === e.id ? { ...x, state: e.state, message: e.message } : x))
+        }))
+      })
+      window.api.onSshHostPrompt((info) => set((s) => ({ sshHostQueue: [...s.sshHostQueue, info] })))
+      void window.api.listSsh().then((sshConnections) => set({ sshConnections }))
       window.api.onUpdate((update) => {
         set({ update })
         if (update.state === 'ready') get().showToast('ok', t('updateReadyToast', { version: update.version ?? '' }))
@@ -176,8 +218,9 @@ export const useStore = create<State>((set, get) => ({
     void window.api.showView(id)
   },
 
-  openSettings: () => {
-    set({ page: 'settings' })
+  openSettings: (anchor) => {
+    // onClick={openSettings} pasa el evento como primer argumento: solo vale un texto
+    set({ page: 'settings', settingsAnchor: typeof anchor === 'string' ? anchor : null })
     void window.api.showView(null)
   },
   closeSettings: () => {
@@ -226,6 +269,81 @@ export const useStore = create<State>((set, get) => ({
   closeMenu: () => set({ menu: null }),
   setSearch: (open) => set({ searchOpen: open }),
   toggleExpand: (key) => set((s) => ({ expanded: { ...s.expanded, [key]: !s.expanded[key] } })),
+
+  setSshConnections: (sshConnections) => set({ sshConnections }),
+
+  openSsh: async (connId, secret) => {
+    try {
+      const session = await window.api.openSsh(connId, 100, 30, secret)
+      const early = earlySshState.get(session.id)
+      earlySshState.delete(session.id)
+      set((s) => ({
+        sshSessions: [...s.sshSessions, early ? { ...session, state: early.state, message: early.message } : session],
+        activeSshId: session.id,
+        page: 'ssh',
+        menu: null,
+        searchOpen: false,
+        sshSecretPrompt: null
+      }))
+      void window.api.showView(null)
+    } catch (e) {
+      if (errMsg(e).includes('NEEDS_SECRET')) {
+        const conn = get().sshConnections.find((c) => c.id === connId)
+        set({ sshSecretPrompt: { connId, name: conn?.name ?? '' }, menu: null, searchOpen: false })
+      } else get().showToast('error', errMsg(e))
+    }
+  },
+
+  selectSsh: (id) => {
+    set({ activeSshId: id, page: 'ssh', menu: null, searchOpen: false })
+    void window.api.showView(null)
+  },
+
+  closeSsh: (id) => {
+    void window.api.closeSsh(id)
+    const sessions = get().sshSessions.filter((s) => s.id !== id)
+    const wasActive = get().activeSshId === id
+    const next = wasActive ? (sessions[sessions.length - 1]?.id ?? null) : get().activeSshId
+    set({ sshSessions: sessions, activeSshId: next })
+    if (wasActive && !next && get().page === 'ssh') {
+      set({ page: 'view' })
+      void window.api.showView(get().activeId)
+    }
+  },
+
+  reconnectSsh: async (session) => {
+    get().closeSsh(session.id)
+    await get().openSsh(session.connId)
+  },
+
+  answerSshHost: (accept) => {
+    const [current, ...rest] = get().sshHostQueue
+    if (!current) return
+    set({ sshHostQueue: rest })
+    void window.api.decideSshHost(current.sessionId, accept)
+  },
+
+  submitSshSecret: (secret) => {
+    const prompt = get().sshSecretPrompt
+    set({ sshSecretPrompt: null })
+    if (prompt) void get().openSsh(prompt.connId, secret)
+  },
+  cancelSshSecret: () => set({ sshSecretPrompt: null }),
+
+  openSshForGuest: async (guest) => {
+    set({ menu: null })
+    const ip = guest.ips[0]
+    if (!ip) {
+      get().showToast('error', t('noIp'))
+      return
+    }
+    const conn = get().sshConnections.find((c) => c.host === ip)
+    if (conn) return get().openSsh(conn.id)
+    // Sin conexión guardada para esa IP: se abre el formulario con los datos del guest
+    set({ sshDraft: { name: guest.name, host: ip, port: 22, username: 'root', auth: 'password' } })
+    get().openSettings('ssh-section')
+    get().showToast('info', t('sshNewFromGuest'))
+  },
 
   runAction: (guest, action) => {
     set({ menu: null })

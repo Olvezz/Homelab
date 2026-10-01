@@ -25,6 +25,17 @@ export const guestRefSchema = z.object({
   vmid: z.number().int().min(1).max(999999999)
 })
 
+export const sshConnectionSchema = z.object({
+  id: z.string().regex(/^ssh-[a-z0-9-]{1,40}$/).optional(),
+  name: z.string().trim().min(1).max(60),
+  host: hostSchema,
+  port: portSchema,
+  username: z.string().regex(/^[A-Za-z0-9._$@-]{1,64}$/),
+  auth: z.enum(['password', 'key', 'agent']),
+  keyPath: z.string().max(500).optional(),
+  secret: z.string().max(1000).optional()
+})
+
 export const nativeThemeSchema = z.enum(['dark', 'light'])
 
 export const powerActionSchema = z.enum(['start', 'shutdown', 'stop', 'reboot'])

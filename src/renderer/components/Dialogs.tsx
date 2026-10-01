@@ -13,6 +13,7 @@ export function GuestMenu(): React.JSX.Element | null {
   const runAction = useStore((s) => s.runAction)
   const openConsole = useStore((s) => s.openConsole)
   const openInPve = useStore((s) => s.openInPve)
+  const openSshForGuest = useStore((s) => s.openSshForGuest)
   const showToast = useStore((s) => s.showToast)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -74,6 +75,9 @@ export function GuestMenu(): React.JSX.Element | null {
         <hr />
         <button role="menuitem" disabled={!running || guest.template} onClick={() => void openConsole(guest)}>
           {t('actConsole')}
+        </button>
+        <button role="menuitem" disabled={!running || guest.template} onClick={() => void openSshForGuest(guest)}>
+          {t('actSsh')}
         </button>
         <button role="menuitem" onClick={() => void openInPve(guest)}>
           {t('actOpenInPve')}
@@ -163,6 +167,8 @@ export function SearchPalette(): React.JSX.Element | null {
   const showTemplates = useStore((s) => s.ui.showTemplates)
   const selectPanel = useStore((s) => s.selectPanel)
   const openInPve = useStore((s) => s.openInPve)
+  const sshConnections = useStore((s) => s.sshConnections)
+  const openSsh = useStore((s) => s.openSsh)
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(0)
 
@@ -195,12 +201,21 @@ export function SearchPalette(): React.JSX.Element | null {
           kind: 'guest' as const,
           haystack: `${g.vmid} ${g.name} ${g.ips.join(' ')} ${g.tags.join(' ')} ${g.panels.map((p) => p.name).join(' ')}`,
           run: () => (g.panels[0] ? selectPanel(g.panels[0].id) : void openInPve(g))
-        }))
+        })),
+      ...sshConnections.map((c) => ({
+        id: `s-${c.id}`,
+        icon: 'ui:terminal',
+        label: c.name,
+        detail: `SSH · ${c.username}@${c.host}:${c.port}`,
+        kind: 'guest' as const,
+        haystack: `ssh ${c.name} ${c.host} ${c.username}`,
+        run: () => void openSsh(c.id)
+      }))
     ]
     return all
       .filter((h) => !q || (h as Hit & { haystack: string }).haystack.toLowerCase().includes(q))
       .slice(0, 30)
-  }, [query, panels, guests, showTemplates, selectPanel, openInPve])
+  }, [query, panels, guests, showTemplates, selectPanel, openInPve, sshConnections, openSsh])
 
   if (!open) return null
 

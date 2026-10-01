@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { CertPrompt } from './components/CertPrompt'
 import { ConfirmDialog, GuestMenu, SearchPalette } from './components/Dialogs'
 import { Settings } from './components/Settings'
+import { SshHostPrompt, SshSecretPrompt } from './components/SshDialogs'
+import { SshView } from './components/SshView'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
 import { Wizard } from './components/Wizard'
@@ -18,6 +20,8 @@ export function App(): React.JSX.Element {
   const menuOpen = useStore((s) => !!s.menu)
   const confirmOpen = useStore((s) => !!s.confirm)
   const searchOpen = useStore((s) => s.searchOpen)
+  const sshModal = useStore((s) => s.sshHostQueue.length > 0 || !!s.sshSecretPrompt)
+  const activeSshId = useStore((s) => s.activeSshId)
   const themeCookie = useStore((s) => s.themeCookie)
   const init = useStore((s) => s.init)
 
@@ -41,10 +45,16 @@ export function App(): React.JSX.Element {
 
   // Los modales y menús quedan tapados por la vista nativa: se oculta mientras estén abiertos
   const certOpen = certQueue.length > 0
-  const overlay = certOpen || menuOpen || confirmOpen || searchOpen
+  const overlay = certOpen || menuOpen || confirmOpen || searchOpen || sshModal
   useEffect(() => {
     void window.api.setOverlay(overlay)
   }, [overlay])
+
+  // Con un terminal SSH delante, los atajos de la app (Ctrl+R, Ctrl+K…) se dejan pasar al shell
+  const terminalFocus = page === 'ssh' && !!activeSshId && !overlay
+  useEffect(() => {
+    void window.api.setTerminalFocus(terminalFocus)
+  }, [terminalFocus])
 
   if (!ready) return <div className="boot">{t('loading')}</div>
 
@@ -55,11 +65,14 @@ export function App(): React.JSX.Element {
         <Toolbar />
         {page === 'settings' && <Settings />}
         {page === 'wizard' && <Wizard />}
+        <SshView />
         {page === 'view' && !activeId && <div className="placeholder">{t('selectPanel')}</div>}
       </main>
       <GuestMenu />
       <ConfirmDialog />
       <SearchPalette />
+      <SshHostPrompt />
+      <SshSecretPrompt />
       {certOpen && <CertPrompt info={certQueue[0]} />}
     </div>
   )

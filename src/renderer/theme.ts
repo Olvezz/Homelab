@@ -39,6 +39,9 @@ export function applyTheme(resolved: Resolved): void {
   const root = document.documentElement
   root.dataset.theme = resolved.mode
   for (const name of TOKEN_NAMES) root.style.removeProperty(name)
-  if (!resolved.theme) return
-  for (const [name, value] of Object.entries(themeTokens(resolved.theme))) root.style.setProperty(name, value)
+  if (resolved.theme) {
+    for (const [name, value] of Object.entries(themeTokens(resolved.theme))) root.style.setProperty(name, value)
+  }
+  // Los terminales SSH recalculan sus colores
+  window.dispatchEvent(new Event('app-theme'))
 }

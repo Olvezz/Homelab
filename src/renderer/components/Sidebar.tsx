@@ -168,6 +168,73 @@ function PanelButton({
   )
 }
 
+function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
+  const connections = useStore((s) => s.sshConnections)
+  const sessions = useStore((s) => s.sshSessions)
+  const activeSshId = useStore((s) => s.activeSshId)
+  const page = useStore((s) => s.page)
+  const openSsh = useStore((s) => s.openSsh)
+  const selectSsh = useStore((s) => s.selectSsh)
+  const closeSsh = useStore((s) => s.closeSsh)
+  const openSettings = useStore((s) => s.openSettings)
+
+  if (collapsed && connections.length === 0 && sessions.length === 0) return null
+  const dot = (state: string): string =>
+    state === 'open' ? 'running' : state === 'connecting' ? 'unknown' : state === 'error' ? 'bad' : 'stopped'
+
+  return (
+    <>
+      {!collapsed && (
+        <div className="sidebar-section with-action">
+          <span>{t('sshSection')}</span>
+          <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-section')}>
+            <Icon k="ui:plus" size={13} />
+          </button>
+        </div>
+      )}
+      <div className="panel-list">
+        {connections.length === 0 && !collapsed && <div className="empty">{t('sshNone')}</div>}
+        {connections.map((c) => (
+          <div className="panel-row" key={c.id}>
+            <button
+              className="panel-item"
+              title={`${c.username}@${c.host}:${c.port}`}
+              onClick={() => void openSsh(c.id)}
+            >
+              <span className="panel-icon">
+                <Icon k="ui:terminal" />
+              </span>
+              {!collapsed && <span className="panel-name">{c.name}</span>}
+            </button>
+          </div>
+        ))}
+      </div>
+      {sessions.length > 0 && (
+        <>
+          {!collapsed && <div className="sidebar-section">{t('sshSessions')}</div>}
+          <div className="panel-list">
+            {sessions.map((s) => (
+              <div className={`panel-row${page === 'ssh' && s.id === activeSshId ? ' active' : ''}`} key={s.id}>
+                <button className="panel-item" title={s.message ?? s.name} onClick={() => selectSsh(s.id)}>
+                  <span className="panel-icon">
+                    <span className={`dot ${dot(s.state)}`} />
+                  </span>
+                  {!collapsed && <span className="panel-name">{s.name}</span>}
+                </button>
+                {!collapsed && (
+                  <button className="tab-close" title={t('sshClose')} aria-label={t('sshClose')} onClick={() => closeSsh(s.id)}>
+                    <Icon k="ui:x" size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 function Tree({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
   const snapshot = useStore((s) => s.snapshot)
   const showTemplates = useStore((s) => s.ui.showTemplates)
@@ -289,6 +356,8 @@ export function Sidebar(): React.JSX.Element {
           ))}
         </div>
 
+        <SshSection collapsed={collapsed} />
+
         {tabs.length > 0 && (
           <>
             {!collapsed && <div className="sidebar-section">{t('consoles')}</div>}
@@ -315,14 +384,14 @@ export function Sidebar(): React.JSX.Element {
         <button
           className={`status ${level}`}
           title={needsAction ? t('statusHint') : statusText}
-          onClick={status === 'unconfigured' || needsAction ? openWizard : openSettings}
+          onClick={status === 'unconfigured' || needsAction ? openWizard : () => openSettings()}
         >
           <span className={`dot ${level === 'ok' ? 'running' : level === 'warn' ? 'unknown' : 'bad'}`} />
           {!collapsed && <span className="status-text">{statusText}</span>}
         </button>
         <button
           className={`panel-item${page === 'settings' ? ' active' : ''}`}
-          onClick={page === 'settings' ? closeSettings : openSettings}
+          onClick={page === 'settings' ? closeSettings : () => openSettings()}
           title={t('settings')}
         >
           <span className="panel-icon">
