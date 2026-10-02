@@ -163,10 +163,14 @@ export class ViewManager {
     this.show(panelId)
   }
 
-  show(panelId: string | null): void {
+  // `reload`: al entrar a un panel que ya estaba cargado se refresca la página (F5). Una vista recién creada ya carga sola.
+  show(panelId: string | null, reload = false): void {
+    const wasActive = this.activeId === panelId
     this.activeId = panelId && this.panels.has(panelId) ? panelId : null
     if (this.activeId) {
-      const entry = this.entries.get(this.activeId) ?? this.create(this.panels.get(this.activeId)!)
+      const existing = this.entries.get(this.activeId)
+      const entry = existing ?? this.create(this.panels.get(this.activeId)!)
+      if (existing && reload && !wasActive && !existing.view.webContents.isDestroyed()) existing.view.webContents.reload()
       entry.lastUsed = Date.now()
       this.scheduleStatus()
     }

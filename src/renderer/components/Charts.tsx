@@ -235,13 +235,13 @@ export function Sparkline({ values, color = 'var(--series-1)' }: { values: (numb
 // Medidor de uso frente a un límite. Los estados alto/crítico llevan icono y texto, no solo color.
 export function Meter({ value, label }: { value: number; label?: string }): React.JSX.Element {
   const v = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
-  const level = v >= 0.9 ? 'crit' : v >= 0.8 ? 'warn' : 'ok'
+  const level = v >= 0.9 ? 'crit' : v >= 0.8 ? 'warn' : 'normal'
   return (
     <div className="meter-wrap">
       <div className="meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} aria-label={label}>
         <span className={`meter-fill ${level}`} style={{ width: `${Math.max(v * 100, v > 0 ? 1.5 : 0)}%` }} />
       </div>
-      {level !== 'ok' && (
+      {level !== 'normal' && (
         <span className={`meter-flag ${level}`}>
           <Icon k="ui:alert" size={12} />
           {level === 'crit' ? t('homeCritical') : t('homeHigh')}

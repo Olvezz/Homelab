@@ -126,16 +126,6 @@ pveum acl modify / --users olvezz@pve --roles PVEAuditor
 
 El syslog además exige el permiso `Sys.Syslog` (lo trae `PVEAdmin`, no `PVEAuditor`): si no lo tiene, esa pestaña lo indica y el resto funciona igual.
 
-## Asistente de IA
-
-Barra lateral → *IA → Asistente* (o clic derecho en un guest → *Preguntar a la IA*). Un chat que conoce tu homelab: le preguntas por el estado de tus guests y puede **proponer acciones** (iniciar/apagar/reiniciar un guest, ejecutar un comando por SSH).
-
-- **Proveedores:** Claude (Anthropic), Gemini (Google), cualquier servicio compatible con la API de OpenAI (OpenAI, Groq, OpenRouter, DeepSeek…) y **Ollama** (modelo local en tu red: nada sale de ella). Se configuran en Ajustes → *Asistentes de IA*, con botón *Probar*. Puedes tener varias conexiones y cambiar de una a otra en el chat.
-- **Hace falta una clave de API** de cada proveedor (se factura aparte, por uso). Las suscripciones de chat (Claude.ai, Gemini Advanced…) **no se pueden conectar** a otras aplicaciones. La clave se cifra con Windows (DPAPI), nunca se guarda en claro y nunca llega a la interfaz: las peticiones salen del proceso principal.
-- **Herramientas de lectura** (se usan solas): estado general, lista y detalle de guests (con notas, IPs y paneles), conexiones SSH guardadas (sin contraseñas).
-- **Acciones** (`power_action`, `ssh_exec`): cada una aparece en el chat con el comando completo y **solo se ejecuta si pulsas Aprobar**; si pulsas Rechazar o no respondes en 5 minutos, no se ejecuta. `ssh_exec` solo usa conexiones guardadas, con la huella del servidor ya confirmada y la contraseña guardada, y se corta a los 60 s. El interruptor *Permitir acciones* las desactiva del todo (el modelo ni las ve).
-- **Privacidad:** lo que escribes y lo que el asistente consulta (nombres, IPs, estado, notas) viaja al proveedor elegido. La conversación vive solo en memoria y se borra con *Nueva conversación* o al cerrar la app. Los datos que devuelven las herramientas se tratan como datos, no como instrucciones (defensa contra textos maliciosos en notas o salidas de comandos), y la aprobación humana es la barrera final.
-
 ## Clic derecho
 
 En la barra lateral, clic derecho sobre cualquier elemento abre sus acciones: **paneles** (abrir, recargar, abrir en el navegador, copiar URL, apagar vista, editar/eliminar si es manual, editar las notas en Proxmox si es descubierto, cerrar la sesión del sitio), **conexiones SSH** (conectar, editar, copiar usuario@host, eliminar), **sesiones SSH** (ir, reconectar, cerrar) y **guests** (energía, consola, SSH, abrir en Proxmox, copiar IP).
@@ -171,7 +161,6 @@ Todos los iconos son SVG monocromos que toman el color del tema (logos de [Simpl
 ## Seguridad
 
 - `contextIsolation`, `sandbox` y sin `nodeIntegration` en todas las vistas; CSP estricta en la UI propia.
-- IA: claves de API cifradas (DPAPI) y solo en el proceso principal; acciones siempre con aprobación explícita.
 - SSH: huellas de servidor confirmadas (TOFU), secretos cifrados con DPAPI y nunca en claro; el terminal solo recibe/envía bytes.
 - IPC validado con `zod` y limitado al frame principal de la ventana; lista blanca de acciones.
 - Las notas y tags de Proxmox son datos no confiables: se parsean con lista blanca y nunca se inyectan como HTML.

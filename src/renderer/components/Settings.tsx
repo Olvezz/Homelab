@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AdguardConfigInput, AdguardConfigView, AiConnection, AiConnectionInput, AiKind, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
+import type { AdguardConfigInput, AdguardConfigView, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -407,229 +407,6 @@ function SshConnections(): React.JSX.Element {
   )
 }
 
-const AI_MODELS: Record<AiKind, string[]> = {
-  anthropic: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-haiku-4-5-20251001'],
-  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
-  openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'],
-  ollama: ['llama3.1', 'qwen2.5', 'mistral']
-}
-const AI_BASE: Record<AiKind, string> = {
-  anthropic: 'https://api.anthropic.com',
-  gemini: 'https://generativelanguage.googleapis.com',
-  openai: 'https://api.openai.com/v1',
-  ollama: 'http://localhost:11434/v1'
-}
-
-interface AiForm {
-  id?: string
-  name: string
-  kind: AiKind
-  baseUrl: string
-  model: string
-  apiKey: string
-  clearKey: boolean
-  hasKey: boolean
-}
-const emptyAi: AiForm = { name: '', kind: 'anthropic', baseUrl: '', model: AI_MODELS.anthropic[0], apiKey: '', clearKey: false, hasKey: false }
-
-function AiConnections(): React.JSX.Element {
-  const connections = useStore((s) => s.aiConnections)
-  const setConnections = useStore((s) => s.setAiConnections)
-  const askConfirm = useStore((s) => s.askConfirm)
-  const ui = useStore((s) => s.ui)
-  const setUi = useStore((s) => s.setUi)
-  const [form, setForm] = useState<AiForm>(emptyAi)
-  const [error, setError] = useState('')
-  const [testing, setTesting] = useState(false)
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
-
-  const kindLabel: Record<AiKind, string> = {
-    anthropic: t('aiKindAnthropic'),
-    gemini: t('aiKindGemini'),
-    openai: t('aiKindOpenai'),
-    ollama: t('aiKindOllama')
-  }
-  const toForm = (c: AiConnection): AiForm => ({
-    id: c.id, name: c.name, kind: c.kind, baseUrl: c.baseUrl ?? '', model: c.model, apiKey: '', clearKey: false, hasKey: c.hasKey
-  })
-
-  const build = (): AiConnectionInput | null => {
-    const fail = (m: string): null => {
-      setError(m)
-      return null
-    }
-    if (!form.name.trim()) return fail(t('errName'))
-    if (!/^[A-Za-z0-9._:/-]{1,100}$/.test(form.model.trim())) return fail(t('errModel'))
-    if (form.baseUrl.trim() && !/^https?:\/\//i.test(form.baseUrl.trim())) return fail(t('errUrl'))
-    const keyGiven = !!form.apiKey || (form.hasKey && !form.clearKey)
-    if (form.kind !== 'ollama' && !keyGiven) return fail(t('errKeyRequired'))
-    return {
-      id: form.id,
-      name: form.name.trim(),
-      kind: form.kind,
-      baseUrl: form.baseUrl.trim() || undefined,
-      model: form.model.trim(),
-      apiKey: form.clearKey ? '' : form.apiKey || undefined
-    }
-  }
-
-  const test = async (): Promise<void> => {
-    const input = build()
-    if (!input) return
-    setError('')
-    setResult(null)
-    setTesting(true)
-    try {
-      setResult(await window.api.testAi(input))
-    } catch (e) {
-      setResult({ ok: false, message: errMsg(e) })
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  const submit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    const input = build()
-    if (!input) return
-    try {
-      const saved = await window.api.saveAi(input)
-      setConnections(saved)
-      if (!ui.lastAiId && saved[0]) setUi({ lastAiId: saved[saved.length - 1].id })
-      setForm(emptyAi)
-      setResult(null)
-      setError('')
-    } catch (err) {
-      setError(errMsg(err))
-    }
-  }
-
-  return (
-    <>
-      <h2 id="ai-section">{t('aiConnections')}</h2>
-      <p className="hint">{t('aiConnectionsHint')}</p>
-      <Toggle checked={ui.aiAllowActions} label={t('aiAllowActions')} onChange={(v) => setUi({ aiAllowActions: v })} />
-      {connections.length > 0 && (
-        <ul className="settings-list">
-          {connections.map((c) => (
-            <li key={c.id}>
-              <span className="panel-icon">
-                <Icon k="ui:sparkles" />
-              </span>
-              <span className="settings-name">{c.name}</span>
-              <span className="settings-url">
-                {kindLabel[c.kind]} · {c.model}
-                {c.hasKey ? '' : ' · sin clave'}
-              </span>
-              <button className="btn small" onClick={() => { setForm(toForm(c)); setError(''); setResult(null) }}>
-                {t('edit')}
-              </button>
-              <button
-                className="btn small danger"
-                onClick={() =>
-                  askConfirm({
-                    title: t('aiDeleteTitle', { name: c.name }),
-                    body: t('aiDeleteBody'),
-                    confirmLabel: t('remove'),
-                    danger: true,
-                    onConfirm: () => void window.api.deleteAi(c.id).then(setConnections)
-                  })
-                }
-              >
-                {t('remove')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <form id="ai-form" className="panel-form" onSubmit={(e) => void submit(e)}>
-        <h3>{form.id ? t('aiEdit') : t('aiNew')}</h3>
-        <div className="row">
-          <label className="field grow">
-            <span>{t('name')}</span>
-            <input value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </label>
-          <label className="field grow">
-            <span>{t('aiKind')}</span>
-            <select
-              value={form.kind}
-              onChange={(e) => {
-                const kind = e.target.value as AiKind
-                setForm({ ...form, kind, model: AI_MODELS[kind][0], baseUrl: '' })
-                setResult(null)
-              }}
-            >
-              {(Object.keys(kindLabel) as AiKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {kindLabel[k]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="row">
-          <label className="field grow">
-            <span>{t('aiModel')}</span>
-            <input
-              list={`ai-models-${form.kind}`}
-              value={form.model}
-              spellCheck={false}
-              onChange={(e) => setForm({ ...form, model: e.target.value })}
-            />
-            <datalist id={`ai-models-${form.kind}`}>
-              {AI_MODELS[form.kind].map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </label>
-          {(form.kind === 'openai' || form.kind === 'ollama') && (
-            <label className="field grow">
-              <span>{t('aiBaseUrl')}</span>
-              <input value={form.baseUrl} placeholder={AI_BASE[form.kind]} spellCheck={false} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} />
-            </label>
-          )}
-        </div>
-        <label className="field">
-          <span>
-            {t('aiApiKey')}
-            {form.kind === 'ollama' ? ` (${t('aiKeyOptional')})` : ''}
-          </span>
-          <input
-            type="password"
-            value={form.apiKey}
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={form.hasKey && !form.clearKey ? t('aiKeyStored') : ''}
-            onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-          />
-        </label>
-        {form.hasKey && (
-          <label className="check">
-            <input type="checkbox" checked={form.clearKey} onChange={(e) => setForm({ ...form, clearKey: e.target.checked })} />
-            <span>{t('aiClearKey')}</span>
-          </label>
-        )}
-        {error && <div className="error">{error}</div>}
-        {result && <div className={`test-result ${result.ok ? 't-ok' : 't-error'}`}>{result.message}</div>}
-        <div className="form-actions">
-          {(form.id || form.name) && (
-            <button type="button" className="btn" onClick={() => { setForm(emptyAi); setError(''); setResult(null) }}>
-              {t('cancel')}
-            </button>
-          )}
-          <button type="button" className="btn" disabled={testing} onClick={() => void test()}>
-            {testing ? t('aiTesting') : t('aiTest')}
-          </button>
-          <button type="submit" className="btn primary">
-            {t('save')}
-          </button>
-        </div>
-      </form>
-    </>
-  )
-}
-
 function Provisioning(): React.JSX.Element {
   const showToast = useStore((s) => s.showToast)
   const selectPanel = useStore((s) => s.selectPanel)
@@ -830,7 +607,7 @@ function AdguardSettings(): React.JSX.Element {
               type="password"
               value={password}
               autoComplete="off"
-              placeholder={cfg?.hasPassword && !clearPw ? t('aiKeyStored') : ''}
+              placeholder={cfg?.hasPassword && !clearPw ? t('keyStored') : ''}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
@@ -838,7 +615,7 @@ function AdguardSettings(): React.JSX.Element {
         {cfg?.hasPassword && (
           <label className="check">
             <input type="checkbox" checked={clearPw} onChange={(e) => setClearPw(e.target.checked)} />
-            <span>{t('aiClearKey')}</span>
+            <span>{t('clearKey')}</span>
           </label>
         )}
         {error && <div className="error">{error}</div>}
@@ -854,7 +631,7 @@ function AdguardSettings(): React.JSX.Element {
             </button>
           )}
           <button type="button" className="btn" disabled={busy} onClick={() => void test()}>
-            {busy ? t('aiTesting') : t('aiTest')}
+            {busy ? t('testing') : t('testConn')}
           </button>
           <button type="submit" className="btn primary">
             {t('save')}
@@ -915,16 +692,32 @@ function Updates(): React.JSX.Element {
   })()
   const busy = update.state === 'checking' || update.state === 'downloading'
 
+  // Un solo botón: busca y, si hay una versión nueva, la descarga y reinicia para instalarla
+  const [installWhenReady, setInstallWhenReady] = useState(false)
+  useEffect(() => {
+    if (!installWhenReady) return
+    if (update.state === 'ready') {
+      setInstallWhenReady(false)
+      void window.api.installUpdate()
+    } else if (update.state === 'none' || update.state === 'error') {
+      setInstallWhenReady(false)
+    }
+  }, [installWhenReady, update.state])
+
   return (
     <>
       <h2>{t('updates')}</h2>
+      <p className="hint">{t('updateCurrent', { version: __APP_VERSION__ })}</p>
       <Toggle checked={autoUpdate} label={t('autoUpdate')} onChange={(v) => setUi({ autoUpdate: v })} />
       <p className={update.state === 'error' ? 'error' : 'hint'}>{line}</p>
       <div className="form-actions spaced">
         <button
-          className="btn"
+          className="btn primary"
           disabled={update.state === 'disabled' || busy || update.state === 'ready'}
-          onClick={() => void window.api.checkUpdate()}
+          onClick={() => {
+            setInstallWhenReady(true)
+            void window.api.checkUpdate()
+          }}
         >
           {t('updateCheck')}
         </button>
@@ -1015,6 +808,30 @@ function Appearance(): React.JSX.Element {
   )
 }
 
+type Tab = 'general' | 'proxmox' | 'access' | 'integrations'
+
+const TABS: { id: Tab; label: Key }[] = [
+  { id: 'general', label: 'tabGeneral' },
+  { id: 'proxmox', label: 'tabProxmox' },
+  { id: 'access', label: 'tabAccess' },
+  { id: 'integrations', label: 'tabIntegrations' }
+]
+
+// Pestaña que contiene cada ancla a la que se puede saltar desde otras pantallas
+const ANCHOR_TAB: Record<string, Tab> = {
+  'ssh-section': 'access',
+  'ssh-form': 'access',
+  'panels-section': 'access',
+  'panels-form': 'access',
+  'monitor-section': 'integrations',
+  'adguard-section': 'integrations',
+  'adguard-form': 'integrations'
+}
+
+function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <div className="settings-card">{children}</div>
+}
+
 export function Settings(): React.JSX.Element {
   const panels = useStore((s) => s.panels)
   const ui = useStore((s) => s.ui)
@@ -1022,10 +839,12 @@ export function Settings(): React.JSX.Element {
   const saveManualPanels = useStore((s) => s.saveManualPanels)
   const closeSettings = useStore((s) => s.closeSettings)
   const anchor = useStore((s) => s.settingsAnchor)
+  const [tab, setTab] = useState<Tab>('general')
 
   // Desplazarse a la sección pedida (p. ej. «Nueva conexión SSH» desde la barra lateral)
   useEffect(() => {
     if (!anchor) return
+    if (ANCHOR_TAB[anchor]) setTab(ANCHOR_TAB[anchor])
     // El ancla se limpia DENTRO del temporizador: limpiarla antes cancelaría el desplazamiento
     const timer = setTimeout(() => {
       const el = document.getElementById(anchor)
@@ -1041,11 +860,16 @@ export function Settings(): React.JSX.Element {
 
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [error, setError] = useState('')
+  const sshEdit = useStore((s) => s.editRequest?.kind === 'ssh')
+  useEffect(() => {
+    if (sshEdit) setTab('access')
+  }, [sshEdit])
 
   // «Editar» desde el menú contextual de la barra lateral
   const panelEdit = useStore((s) => s.editRequest)
   useEffect(() => {
     if (panelEdit?.kind !== 'panel') return
+    setTab('access')
     const p = manual.find((x) => x.id === panelEdit.id)
     useStore.setState({ editRequest: null })
     if (p) {
@@ -1094,102 +918,144 @@ export function Settings(): React.JSX.Element {
         </button>
       </div>
 
-      <Connection />
-
-      <Appearance />
-
-      <h2>{t('general')}</h2>
-      <Toggle checked={ui.closeToTray} label={t('closeToTray')} onChange={(v) => setUi({ closeToTray: v })} />
-      <Toggle checked={ui.startWithWindows} label={t('startWithWindows')} onChange={(v) => setUi({ startWithWindows: v })} />
-      <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
-
-      <Monitoring />
-
-      <AdguardSettings />
-
-      <Updates />
-
-      <SshConnections />
-
-      <AiConnections />
-
-      <Provisioning />
-
-      <h2 id="panels-section">{t('manualPanels')}</h2>
-      <p className="hint">{t('manualPanelsHint')}</p>
-
-      <ul className="settings-list">
-        {manual.map((p) => (
-          <li key={p.id}>
-            <span className="panel-icon">
-              <Icon k={panelIconKey(p, undefined)} />
-            </span>
-            <span className="settings-name">{p.name}</span>
-            <span className="settings-url">{p.url}</span>
-            <button
-              className="btn small"
-              onClick={() => {
-                setDraft({ id: p.id, name: p.name, url: p.url, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
-                setError('')
-              }}
-            >
-              {t('edit')}
-            </button>
-            <button className="btn small danger" onClick={() => void remove(p)}>
-              {t('remove')}
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <form id="panels-form" className="panel-form" onSubmit={(e) => void submit(e)}>
-        <h3>{draft.id === null ? t('addPanel') : t('editPanel')}</h3>
-        <label className="field">
-          <span>{t('name')}</span>
-          <input value={draft.name} maxLength={60} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>{t('url')}</span>
-          <input value={draft.url} maxLength={2048} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>{t('icon')}</span>
-          <div className="icon-pick">
-            <Icon
-              k={panelIconKey({ id: 'x', name: draft.name, url: draft.url || 'http://x', icon: draft.icon || undefined, source: 'manual' }, undefined)}
-              size={20}
-            />
-            <select value={draft.icon} onChange={(e) => setDraft({ ...draft, icon: e.target.value })}>
-              <option value="">{t('iconAuto')}</option>
-              {ICON_CHOICES.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </label>
-        {error && <div className="error">{error}</div>}
-        <div className="form-actions">
-          {draft.id !== null && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setDraft(emptyDraft)
-                setError('')
-              }}
-            >
-              {t('cancel')}
-            </button>
-          )}
-          <button type="submit" className="btn primary">
-            {t('save')}
+      <nav className="settings-tabs" role="tablist">
+        {TABS.map((x) => (
+          <button
+            key={x.id}
+            role="tab"
+            aria-selected={tab === x.id}
+            className={`settings-tab${tab === x.id ? ' active' : ''}`}
+            onClick={() => setTab(x.id)}
+          >
+            {t(x.label)}
           </button>
-        </div>
-      </form>
+        ))}
+      </nav>
 
-      <Diagnostics />
+      {tab === 'general' && (
+        <>
+          <Card>
+            <Appearance />
+          </Card>
+          <Card>
+            <h2>{t('general')}</h2>
+            <Toggle checked={ui.closeToTray} label={t('closeToTray')} onChange={(v) => setUi({ closeToTray: v })} />
+            <Toggle checked={ui.startWithWindows} label={t('startWithWindows')} onChange={(v) => setUi({ startWithWindows: v })} />
+            <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
+          </Card>
+          <Card>
+            <Updates />
+          </Card>
+        </>
+      )}
+
+      {tab === 'proxmox' && (
+        <>
+          <Card>
+            <Connection />
+          </Card>
+          <Card>
+            <Provisioning />
+          </Card>
+          <Card>
+            <Diagnostics />
+          </Card>
+        </>
+      )}
+
+      {tab === 'access' && (
+        <>
+          <Card>
+            <SshConnections />
+          </Card>
+          <Card>
+          <h2 id="panels-section">{t('manualPanels')}</h2>
+          <p className="hint">{t('manualPanelsHint')}</p>
+
+          <ul className="settings-list">
+            {manual.map((p) => (
+              <li key={p.id}>
+                <span className="panel-icon">
+                  <Icon k={panelIconKey(p, undefined)} />
+                </span>
+                <span className="settings-name">{p.name}</span>
+                <span className="settings-url">{p.url}</span>
+                <button
+                  className="btn small"
+                  onClick={() => {
+                    setDraft({ id: p.id, name: p.name, url: p.url, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+                    setError('')
+                  }}
+                >
+                  {t('edit')}
+                </button>
+                <button className="btn small danger" onClick={() => void remove(p)}>
+                  {t('remove')}
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <form id="panels-form" className="panel-form" onSubmit={(e) => void submit(e)}>
+            <h3>{draft.id === null ? t('addPanel') : t('editPanel')}</h3>
+            <label className="field">
+              <span>{t('name')}</span>
+              <input value={draft.name} maxLength={60} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>{t('url')}</span>
+              <input value={draft.url} maxLength={2048} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>{t('icon')}</span>
+              <div className="icon-pick">
+                <Icon
+                  k={panelIconKey({ id: 'x', name: draft.name, url: draft.url || 'http://x', icon: draft.icon || undefined, source: 'manual' }, undefined)}
+                  size={20}
+                />
+                <select value={draft.icon} onChange={(e) => setDraft({ ...draft, icon: e.target.value })}>
+                  <option value="">{t('iconAuto')}</option>
+                  {ICON_CHOICES.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
+            {error && <div className="error">{error}</div>}
+            <div className="form-actions">
+              {draft.id !== null && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setDraft(emptyDraft)
+                    setError('')
+                  }}
+                >
+                  {t('cancel')}
+                </button>
+              )}
+              <button type="submit" className="btn primary">
+                {t('save')}
+              </button>
+            </div>
+          </form>
+          </Card>
+        </>
+      )}
+
+      {tab === 'integrations' && (
+        <>
+          <Card>
+            <Monitoring />
+          </Card>
+          <Card>
+            <AdguardSettings />
+          </Card>
+        </>
+      )}
 
       <p className="about">
         {t('aboutBuild', { version: __APP_VERSION__, date: new Date(__BUILD_TIME__).toLocaleString('es') })}

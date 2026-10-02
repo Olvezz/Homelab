@@ -24,6 +24,7 @@ const RULES: [IconKey, RegExp][] = [
   ['influxdb', /influx/],
   ['plex', /\bplex\b/],
   ['jellyfin', /jellyfin/],
+  ['ui:clapperboard', /jellyseerr|overseerr/], // Simple Icons no tiene su logo
   ['emby', /\bemby\b/],
   ['nextcloud', /nextcloud/],
   ['truenas', /truenas|freenas/],

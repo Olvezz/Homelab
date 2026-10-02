@@ -14,7 +14,6 @@ export function GuestMenu(): React.JSX.Element | null {
   const openConsole = useStore((s) => s.openConsole)
   const openInPve = useStore((s) => s.openInPve)
   const openSshForGuest = useStore((s) => s.openSshForGuest)
-  const askAiAboutGuest = useStore((s) => s.askAiAboutGuest)
   const showToast = useStore((s) => s.showToast)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -82,9 +81,6 @@ export function GuestMenu(): React.JSX.Element | null {
         </button>
         <button role="menuitem" onClick={() => void openInPve(guest)}>
           {t('actOpenInPve')}
-        </button>
-        <button role="menuitem" onClick={() => askAiAboutGuest(guest)}>
-          {t('actAsk')}
         </button>
         <button
           role="menuitem"

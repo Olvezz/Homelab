@@ -10,7 +10,6 @@ import { log } from './log'
 import { PanelHub } from './panelHub'
 import { PveService } from './pve/service'
 import { CertTrust } from './security/certTrust'
-import { AiManager } from './ai/manager'
 import { AdguardManager } from './adguard/manager'
 import { MonitorService } from './pve/monitor'
 import { SshManager } from './ssh/manager'
@@ -152,19 +151,6 @@ function createWindow(store: ConfigStore): void {
     }
   )
   const ssh = new SshManager(store, send, { data: IPC.sshData, state: IPC.sshState, hostPrompt: IPC.sshHostPrompt })
-  // El asistente consulta el homelab a través de esta interfaz; las acciones siempre pasan por aprobación
-  const ai = new AiManager(
-    store,
-    send,
-    {
-      snapshot: () => service.getSnapshot(),
-      panels: () => hub.all(),
-      sshConnections: () => ssh.list(),
-      power: (ref, action) => service.action(ref, action),
-      sshExec: (id, command) => ssh.exec(id, command)
-    },
-    IPC.aiEvent
-  )
   const monitor = new MonitorService(
     () => service.getClient(),
     (id, command) => ssh.exec(id, command),
@@ -188,7 +174,6 @@ function createWindow(store: ConfigStore): void {
     onNativeTheme,
     updater,
     ssh,
-    ai,
     monitor,
     adguard,
     setTerminalFocus: (on) => {
@@ -230,7 +215,6 @@ function createWindow(store: ConfigStore): void {
     service.stop()
     updater.stop()
     ssh.closeAll()
-    ai.reset()
   })
 
   createTray(

@@ -313,7 +313,7 @@ export function Home(): React.JSX.Element {
   if (!connected && snap.status !== 'connecting') {
     return (
       <section className="home">
-        <div className="ai-empty">
+        <div className="empty-state">
           <Icon k="ui:home" size={28} />
           <h2>{t('homeTitle')}</h2>
           <p>{snap.status === 'unconfigured' ? t('homeConnectHint') : (snap.message ?? t('statusOffline'))}</p>

@@ -8,10 +8,9 @@ import {
   type ProbeResult,
   type UiConfig
 } from '../shared/types'
-import { panelsSchema, uiPatchSchema, type ConfigStore } from './config/store'
+import { notesSchema, panelsSchema, uiPatchSchema, type ConfigStore } from './config/store'
 import {
   adguardConfigSchema,
-  aiConnectionSchema,
   certDecisionSchema,
   connectionSchema,
   guestNameSchema,
@@ -31,7 +30,6 @@ import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
 import type { AdguardManager } from './adguard/manager'
-import type { AiManager } from './ai/manager'
 import type { MonitorService } from './pve/monitor'
 import type { SshManager } from './ssh/manager'
 import type { Updater } from './updater'
@@ -48,13 +46,12 @@ interface Deps {
   onNativeTheme: (mode: 'dark' | 'light') => void
   updater: Updater
   ssh: SshManager
-  ai: AiManager
   monitor: MonitorService
   adguard: AdguardManager
   setTerminalFocus: (on: boolean) => void
 }
 
-export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, ai, monitor, adguard, setTerminalFocus }: Deps): void {
+export function registerIpc({ win, store, views, trust, service, hub, onUiChange, onNativeTheme, updater, ssh, monitor, adguard, setTerminalFocus }: Deps): void {
   // Solo la UI propia (frame principal de la ventana) puede hablar con el main; nunca una vista remota
   const handle = (channel: string, fn: (...args: unknown[]) => unknown): void => {
     ipcMain.handle(channel, (event, ...args) => {
@@ -87,6 +84,14 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
       c.panels = panels
     })
     hub.sync()
+  })
+
+  handle(IPC.notesGet, () => store.get().notes)
+  handle(IPC.notesSave, (raw) => {
+    const notes = notesSchema.parse(raw)
+    store.update((c) => {
+      c.notes = notes
+    })
   })
 
   handle(IPC.setUi, (raw) => {
@@ -153,22 +158,6 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     return monitor.get(node, timeframe)
   })
 
-  // ---- Asistente de IA ----
-  handle(IPC.aiList, () => ai.list())
-  handle(IPC.aiSave, (raw) => ai.save(aiConnectionSchema.parse(raw)))
-  handle(IPC.aiDelete, (raw) => ai.delete(z.string().regex(/^ai-[a-z0-9-]{1,40}$/).parse(raw)))
-  handle(IPC.aiTest, (raw) => ai.test(aiConnectionSchema.parse(raw)))
-  handle(IPC.aiSend, (...raw) => {
-    const [connId, text, convId] = z.tuple([z.string().regex(/^ai-[a-z0-9-]{1,40}$/), z.string().min(1).max(8000), z.string().max(100)]).parse(raw)
-    void ai.send(connId, text, convId) // la respuesta llega como eventos
-  })
-  handle(IPC.aiStop, () => ai.stop())
-  handle(IPC.aiReset, () => ai.reset())
-  handle(IPC.aiApprove, (...raw) => {
-    const [callId, ok] = z.tuple([z.string().min(1).max(100), z.boolean()]).parse(raw)
-    ai.approve(callId, ok)
-  })
-
   // ---- SSH ----
   handle(IPC.sshList, () => ssh.list())
   handle(IPC.sshSave, (raw) => ssh.save(sshConnectionSchema.parse(raw)))
@@ -224,8 +213,8 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     onNativeTheme(nativeThemeSchema.parse(raw))
   })
 
-  handle(IPC.showView, (raw) => {
-    views.show(z.union([idSchema, z.null()]).parse(raw))
+  handle(IPC.showView, (raw, reload) => {
+    views.show(z.union([idSchema, z.null()]).parse(raw), z.boolean().optional().parse(reload) ?? false)
   })
 
   handle(IPC.setOverlay, (raw) => {

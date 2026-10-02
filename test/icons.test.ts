@@ -28,6 +28,10 @@ describe('iconForGuest', () => {
     expect(iconForGuest({ name: 'x', type: 'qemu', osType: 'win11', osId: 'mswindows' })).toBe('ui:windows')
     expect(iconForGuest({ name: 'x', type: 'qemu', osType: 'l26' })).toBe('linux')
   })
+  it('Jellyseerr y Overseerr no tienen logo de marca: icono genérico de películas', () => {
+    expect(iconForPanel({ name: 'Jellyseerr', url: 'http://10.0.0.53:5055' }, undefined, known)).toBe('ui:clapperboard')
+    expect(iconForPanel({ name: 'Peticiones', url: 'https://overseerr.casa.lan' }, undefined, known)).toBe('ui:clapperboard')
+  })
   it('paneles genéricos (globo) no definen la función; el nombre sí', () => {
     expect(iconForGuest({ name: 'docker-server', type: 'qemu', osId: 'ubuntu', panelIcons: ['ui:globe'] })).toBe('docker')
   })

@@ -299,27 +299,6 @@ function HomeEntry({ collapsed }: { collapsed: boolean }): React.JSX.Element {
   )
 }
 
-function AiSection({ collapsed }: { collapsed: boolean }): React.JSX.Element {
-  const page = useStore((s) => s.page)
-  const openAi = useStore((s) => s.openAi)
-  const busy = useStore((s) => s.aiBusy)
-  return (
-    <>
-      {!collapsed && <div className="sidebar-section">{t('aiSection')}</div>}
-      <div className="panel-list">
-        <div className={`panel-row${page === 'ai' ? ' active' : ''}`}>
-          <button className="panel-item" title={t('aiTitle')} onClick={() => openAi()}>
-            <span className="panel-icon">
-              <Icon k={busy ? 'ui:loader' : 'ui:sparkles'} className={busy ? 'spin' : undefined} />
-            </span>
-            {!collapsed && <span className="panel-name">{t('aiAssistant')}</span>}
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
 function Tree({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
   const snapshot = useStore((s) => s.snapshot)
   const showTemplates = useStore((s) => s.ui.showTemplates)
@@ -379,6 +358,7 @@ export function Sidebar(): React.JSX.Element {
   const openSettings = useStore((s) => s.openSettings)
   const closeSettings = useStore((s) => s.closeSettings)
   const openWizard = useStore((s) => s.openWizard)
+  const openNotes = useStore((s) => s.openNotes)
   const update = useStore((s) => s.update)
   const setUi = useStore((s) => s.setUi)
   const setSearch = useStore((s) => s.setSearch)
@@ -452,8 +432,6 @@ export function Sidebar(): React.JSX.Element {
 
         <SshSection collapsed={collapsed} />
 
-        <AiSection collapsed={collapsed} />
-
         {tabs.length > 0 && (
           <>
             {!collapsed && <div className="sidebar-section">{t('consoles')}</div>}
@@ -484,6 +462,12 @@ export function Sidebar(): React.JSX.Element {
         >
           <span className={`dot ${level === 'ok' ? 'running' : level === 'warn' ? 'unknown' : 'bad'}`} />
           {!collapsed && <span className="status-text">{statusText}</span>}
+        </button>
+        <button className={`panel-item${page === 'notes' ? ' active' : ''}`} onClick={openNotes} title={t('notes')}>
+          <span className="panel-icon">
+            <Icon k="ui:notes" />
+          </span>
+          {!collapsed && <span className="panel-name">{t('notes')}</span>}
         </button>
         <button
           className={`panel-item${page === 'settings' ? ' active' : ''}`}

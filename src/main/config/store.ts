@@ -31,8 +31,6 @@ export const uiPatchSchema = z
     showTemplates: z.boolean(),
     startOnHome: z.boolean(),
     monitorSshId: z.string().regex(/^ssh-[a-z0-9-]{1,40}$/).or(z.literal('')),
-    aiAllowActions: z.boolean(),
-    lastAiId: z.string().regex(/^ai-[a-z0-9-]{1,40}$/),
     autoUpdate: z.boolean(),
     lastActiveId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
   })
@@ -46,7 +44,6 @@ const defaultUi: UiConfig = {
   startWithWindows: false,
   showTemplates: false,
   startOnHome: true,
-  aiAllowActions: true,
   autoUpdate: true
 }
 
@@ -93,14 +90,13 @@ const sshConnSchema = z.object({
   secretEnc: z.string().nullable() // base64 (safeStorage); null = se pide al conectar
 })
 
-const aiConnSchema = z.object({
-  id: z.string().regex(/^ai-[a-z0-9-]{1,40}$/),
-  name: z.string().trim().min(1).max(60),
-  kind: z.enum(['anthropic', 'gemini', 'openai', 'ollama']),
-  baseUrl: httpUrlSchema.optional(),
-  model: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/),
-  keyEnc: z.string().nullable() // base64 (safeStorage); null = sin clave o solo en memoria
+export const noteSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  title: z.string().max(120),
+  kind: z.enum(['command', 'note']),
+  body: z.string().max(20000)
 })
+export const notesSchema = z.array(noteSchema).max(500)
 
 const configSchema = z.object({
   // Versión de la app que escribió el archivo por última vez (para copias de seguridad al actualizar)
@@ -117,8 +113,6 @@ const configSchema = z.object({
       showTemplates: z.boolean().catch(defaultUi.showTemplates),
       startOnHome: z.boolean().catch(defaultUi.startOnHome),
       monitorSshId: z.string().optional().catch(undefined),
-      aiAllowActions: z.boolean().catch(defaultUi.aiAllowActions),
-      lastAiId: z.string().optional().catch(undefined),
       autoUpdate: z.boolean().catch(defaultUi.autoUpdate),
       lastActiveId: z.string().optional().catch(undefined)
     })
@@ -128,14 +122,14 @@ const configSchema = z.object({
   pve: pveSchema.nullable().catch(null),
   // Orígenes fuera de rangos privados que el usuario aprobó para paneles descubiertos
   approvedExternal: z.array(z.string()).catch([]),
-  // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
-  ai: z.array(aiConnSchema).max(20).catch([]), // conexiones con proveedores de IA
   // AdGuard Home (panel de inicio): dirección y credenciales (la contraseña va cifrada)
   adguard: z
     .object({ url: httpUrlSchema, username: z.string().max(100), passwordEnc: z.string().nullable() })
     .nullable()
     .catch(null),
+  // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
   ssh: z.array(sshConnSchema).max(200).catch([]),
+  notes: notesSchema.catch([]), // apartado de notas y comandos importantes
   sshHostKeys: z.record(z.string(), z.string()).catch({}),
   // Script que se ejecuta en cada guest nuevo (null = el predeterminado de la app)
   provisionScript: z.string().max(20000).nullable().catch(null)
@@ -167,7 +161,7 @@ export class ConfigStore {
     const parsed = configSchema.safeParse(raw)
     this.data = parsed.success
       ? parsed.data
-      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, ai: [], adguard: null, ssh: [], sshHostKeys: {} }
+      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, adguard: null, ssh: [], sshHostKeys: {}, notes: [] }
 
     // Al cambiar de versión se guarda una copia del archivo anterior; los datos viven en
     // %APPDATA%, fuera de la carpeta de la app, así que instalar encima no los toca.

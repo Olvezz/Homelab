@@ -17,7 +17,6 @@ import {
   RotateCw,
   LayoutDashboard,
   Search,
-  Sparkles,
   Server,
   Settings,
   SquareTerminal,
@@ -25,6 +24,8 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
+  Clapperboard,
+  StickyNote,
   type LucideIcon
 } from 'lucide-react'
 import brandsJson from '../brands.json'
@@ -43,7 +44,6 @@ const UI: Record<string, LucideIcon> = {
   windows: AppWindow,
   menu: Menu,
   search: Search,
-  sparkles: Sparkles,
   settings: Settings,
   'chevron-right': ChevronRight,
   'chevron-down': ChevronDown,
@@ -60,7 +60,9 @@ const UI: Record<string, LucideIcon> = {
   download: Download,
   external: ExternalLink,
   loader: Loader,
-  lock: Lock
+  lock: Lock,
+  clapperboard: Clapperboard,
+  notes: StickyNote
 }
 
 export const isKnownIcon = (key: string): boolean =>

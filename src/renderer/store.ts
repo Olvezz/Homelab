@@ -8,8 +8,6 @@ import {
   type PveConfigView,
   type PanelStatus,
   type PveSnapshot,
-  type AiConnection,
-  type AiEvent,
   type SshConnection,
   type SshConnectionInput,
   type SshHostPromptInfo,
@@ -23,23 +21,9 @@ import {
 import { errMsg, t } from './i18n'
 import { pushData } from './sshBus'
 
-export interface ChatItem {
-  id: string
-  role: 'user' | 'assistant' | 'tool' | 'error'
-  text: string
-  tool?: {
-    callId: string
-    name: string
-    summary: string
-    detail: string
-    status: 'running' | 'awaiting' | 'done' | 'error' | 'denied'
-    result?: string
-  }
-}
-
 export type ItemKind = 'panel' | 'ssh' | 'session'
 
-export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'ai' | 'home'
+export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'home' | 'notes'
 
 export interface ConfirmState {
   title: string
@@ -76,15 +60,11 @@ interface State {
   sshSecretPrompt: { connId: string; name: string } | null
   sshDraft: Partial<SshConnectionInput> | null // conexión nueva con datos de un guest
   settingsAnchor: string | null // sección de Ajustes a la que desplazarse al abrir
-  aiConnections: AiConnection[]
-  aiChat: ChatItem[]
-  aiBusy: boolean
-  aiConvId: string
-  aiDraft: string | null // texto que se precarga en el cuadro del asistente
 
   init: () => Promise<void>
   selectPanel: (id: string) => void
   openHome: () => void
+  openNotes: () => void
   openSettings: (anchor?: string) => void
   closeSettings: () => void
   openWizard: () => void
@@ -113,13 +93,6 @@ interface State {
   submitSshSecret: (secret: string) => void
   cancelSshSecret: () => void
   openSshForGuest: (guest: Guest) => Promise<void>
-  setAiConnections: (connections: AiConnection[]) => void
-  openAi: (prefill?: string) => void
-  sendAi: (text: string) => Promise<void>
-  stopAi: () => void
-  newAiChat: () => void
-  approveAi: (callId: string, ok: boolean) => void
-  askAiAboutGuest: (guest: Guest) => void
   runAction: (guest: Guest, action: PowerAction) => void
   openConsole: (guest: Guest) => Promise<void>
   openInPve: (guest: Guest) => Promise<void>
@@ -143,7 +116,6 @@ const defaultUi: UiConfig = {
   startWithWindows: false,
   showTemplates: false,
   startOnHome: true,
-  aiAllowActions: true,
   autoUpdate: true
 }
 
@@ -193,11 +165,6 @@ export const useStore = create<State>((set, get) => ({
   sshSecretPrompt: null,
   sshDraft: null,
   settingsAnchor: null,
-  aiConnections: [],
-  aiChat: [],
-  aiBusy: false,
-  aiConvId: crypto.randomUUID(),
-  aiDraft: null,
 
   init: async () => {
     const { panels, ui, pve, snapshot, themeCookie } = await window.api.getConfig()
@@ -249,11 +216,6 @@ export const useStore = create<State>((set, get) => ({
       })
       window.api.onSshHostPrompt((info) => set((s) => ({ sshHostQueue: [...s.sshHostQueue, info] })))
       void window.api.listSsh().then((sshConnections) => set({ sshConnections }))
-      void window.api.listAi().then((aiConnections) => set({ aiConnections }))
-      window.api.onAiEvent((event) => {
-        if (event.convId !== get().aiConvId) return
-        set((s) => applyAiEvent(s, event))
-      })
       window.api.onUpdate((update) => {
         set({ update })
         if (update.state === 'ready') get().showToast('ok', t('updateReadyToast', { version: update.version ?? '' }))
@@ -270,9 +232,13 @@ export const useStore = create<State>((set, get) => ({
     userPicked = true
     set({ activeId: id, page: 'view', viewState: null, menu: null, searchOpen: false })
     if (!get().panels.find((p) => p.id === id)?.kind) void window.api.setUi({ lastActiveId: id })
-    void window.api.showView(id)
+    void window.api.showView(id, true) // entrar a un panel lo refresca (F5)
   },
 
+  openNotes: () => {
+    set({ page: 'notes', menu: null, itemMenu: null, searchOpen: false })
+    void window.api.showView(null)
+  },
   openHome: () => {
     set({ page: 'home', menu: null, itemMenu: null, searchOpen: false })
     void window.api.showView(null)
@@ -407,51 +373,6 @@ export const useStore = create<State>((set, get) => ({
     get().showToast('info', t('sshNewFromGuest'))
   },
 
-  setAiConnections: (aiConnections) => set({ aiConnections }),
-
-  openAi: (prefill) => {
-    set({ page: 'ai', menu: null, itemMenu: null, searchOpen: false, aiDraft: prefill ?? null })
-    void window.api.showView(null)
-  },
-
-  sendAi: async (text) => {
-    const { aiConnections, ui, aiConvId } = get()
-    const conn = aiConnections.find((c) => c.id === ui.lastAiId) ?? aiConnections[0]
-    if (!conn) {
-      get().openSettings('ai-form')
-      return
-    }
-    set((s) => ({ aiChat: [...s.aiChat, { id: crypto.randomUUID(), role: 'user', text }], aiBusy: true }))
-    try {
-      await window.api.sendAi(conn.id, text, aiConvId)
-    } catch (e) {
-      set((s) => ({ aiChat: [...s.aiChat, { id: crypto.randomUUID(), role: 'error', text: errMsg(e) }], aiBusy: false }))
-    }
-  },
-
-  stopAi: () => void window.api.stopAi(),
-
-  newAiChat: () => {
-    void window.api.resetAi()
-    set({ aiChat: [], aiBusy: false, aiConvId: crypto.randomUUID() })
-  },
-
-  approveAi: (callId, ok) => {
-    // La tarjeta pasa a «en curso» (o «rechazada») al instante; el resultado llega por evento
-    set((s) => ({
-      aiChat: s.aiChat.map((i) =>
-        i.tool?.callId === callId ? { ...i, tool: { ...i.tool, status: ok ? 'running' : 'denied' } } : i
-      )
-    }))
-    void window.api.approveAi(callId, ok)
-  },
-
-  askAiAboutGuest: (guest) => {
-    set({ menu: null })
-    get().openAi()
-    void get().sendAi(t('aiAboutGuest', { vmid: guest.vmid, name: guest.name }))
-  },
-
   runAction: (guest, action) => {
     set({ menu: null })
     void window.api
@@ -485,38 +406,6 @@ export const useStore = create<State>((set, get) => ({
   }
 }))
 
-// Aplica un evento del asistente al historial del chat
-function applyAiEvent(s: State, ev: AiEvent): Partial<State> {
-  const chat = s.aiChat
-  const last = chat[chat.length - 1]
-  switch (ev.type) {
-    case 'text':
-      if (last?.role === 'assistant') return { aiChat: [...chat.slice(0, -1), { ...last, text: last.text + ev.text }] }
-      return { aiChat: [...chat, { id: crypto.randomUUID(), role: 'assistant', text: ev.text }] }
-    case 'tool':
-      return {
-        aiChat: [
-          ...chat,
-          {
-            id: ev.callId,
-            role: 'tool',
-            text: '',
-            tool: { callId: ev.callId, name: ev.name, summary: ev.summary, detail: ev.detail, status: ev.status }
-          }
-        ]
-      }
-    case 'tool-result':
-      return {
-        aiChat: chat.map((i) =>
-          i.tool?.callId === ev.callId ? { ...i, tool: { ...i.tool, status: ev.status, result: ev.result } } : i
-        )
-      }
-    case 'done':
-      return { aiBusy: false }
-    case 'error':
-      return { aiChat: [...chat, { id: crypto.randomUUID(), role: 'error', text: ev.message }], aiBusy: false }
-  }
-}
 
 function handleShortcut(sc: Shortcut): void {
   const s = useStore.getState()

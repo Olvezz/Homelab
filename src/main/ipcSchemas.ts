@@ -67,15 +67,6 @@ export const navSchema = z.enum([
 
 export const certDecisionSchema = z.tuple([z.string().min(1).max(255), z.string().max(200), z.boolean()])
 
-export const aiConnectionSchema = z.object({
-  id: z.string().regex(/^ai-[a-z0-9-]{1,40}$/).optional(),
-  name: z.string().trim().min(1).max(60),
-  kind: z.enum(['anthropic', 'gemini', 'openai', 'ollama']),
-  baseUrl: httpUrlSchema.optional(),
-  model: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/),
-  apiKey: z.string().max(500).optional()
-})
-
 export const adguardConfigSchema = z.object({
   url: httpUrlSchema,
   username: z.string().max(100).optional(),

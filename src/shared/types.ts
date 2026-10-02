@@ -31,14 +31,6 @@ export const IPC = {
   adguardClear: 'adguard:clear',
   panelStatusGet: 'panel:status-get',
   panelStop: 'panel:stop',
-  aiList: 'ai:list',
-  aiSave: 'ai:save',
-  aiDelete: 'ai:delete',
-  aiTest: 'ai:test',
-  aiSend: 'ai:send',
-  aiStop: 'ai:stop',
-  aiReset: 'ai:reset',
-  aiApprove: 'ai:approve',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
@@ -62,6 +54,8 @@ export const IPC = {
   updateGet: 'update:get',
   updateCheck: 'update:check',
   updateInstall: 'update:install',
+  notesGet: 'notes:get',
+  notesSave: 'notes:save',
   // eventos main -> renderer
   viewState: 'view:state',
   certPrompt: 'cert:prompt',
@@ -70,7 +64,6 @@ export const IPC = {
   toast: 'toast',
   themeCookie: 'theme:cookie',
   updateStatus: 'update:status',
-  aiEvent: 'ai:event',
   panelStatus: 'panel:status',
   sshData: 'ssh:data',
   sshState: 'ssh:state',
@@ -107,8 +100,6 @@ export interface UiConfig {
   showTemplates: boolean
   startOnHome: boolean // abrir el panel de inicio al arrancar
   monitorSshId?: string // conexión SSH al host Proxmox para listar procesos
-  aiAllowActions: boolean // el asistente puede proponer acciones (siempre con aprobación)
-  lastAiId?: string
   autoUpdate: boolean // comprobar y descargar actualizaciones en segundo plano
   lastActiveId?: string
 }
@@ -200,6 +191,14 @@ export interface AppConfigView {
   pve: PveConfigView | null
   snapshot: PveSnapshot
   themeCookie: string | null // valor de PVEThemeCookie en la sesión web de Proxmox
+}
+
+// Notas del usuario (comandos importantes, recordatorios…)
+export interface Note {
+  id: string
+  title: string
+  kind: 'command' | 'note'
+  body: string
 }
 
 export interface UpdateStatus {
@@ -357,41 +356,6 @@ export interface MonitorSnapshot {
   errors: Record<string, string>
 }
 
-export type AiKind = 'anthropic' | 'gemini' | 'openai' | 'ollama'
-
-export interface AiConnection {
-  id: string
-  name: string
-  kind: AiKind
-  baseUrl?: string // solo openai/ollama (o un proxy propio)
-  model: string
-  hasKey: boolean
-}
-
-export interface AiConnectionInput {
-  id?: string
-  name: string
-  kind: AiKind
-  baseUrl?: string
-  model: string
-  apiKey?: string // undefined = conservar la guardada; '' = borrarla
-}
-
-export type AiEvent =
-  | { convId: string; type: 'text'; text: string }
-  | {
-      convId: string
-      type: 'tool'
-      callId: string
-      name: string
-      summary: string
-      detail: string
-      status: 'running' | 'awaiting'
-    }
-  | { convId: string; type: 'tool-result'; callId: string; status: 'done' | 'error' | 'denied'; result: string }
-  | { convId: string; type: 'done' }
-  | { convId: string; type: 'error'; message: string }
-
 export type SshAuth = 'password' | 'key' | 'agent'
 
 export interface SshConnection {
@@ -527,7 +491,7 @@ export interface Api {
   getConfig(): Promise<AppConfigView>
   savePanels(panels: Panel[]): Promise<void>
   setUi(patch: Partial<UiConfig>): Promise<UiConfig>
-  showView(panelId: string | null): Promise<void>
+  showView(panelId: string | null, reload?: boolean): Promise<void>
   setOverlay(on: boolean): Promise<void>
   nav(action: NavAction): Promise<void>
   decideCert(hostname: string, fingerprint: string, accept: boolean): Promise<void>
@@ -555,15 +519,6 @@ export interface Api {
   testAdguard(input: AdguardConfigInput): Promise<{ ok: boolean; message: string }>
   clearAdguard(): Promise<void>
   getMonitor(node: string, timeframe: Timeframe): Promise<MonitorSnapshot>
-  listAi(): Promise<AiConnection[]>
-  saveAi(input: AiConnectionInput): Promise<AiConnection[]>
-  deleteAi(id: string): Promise<AiConnection[]>
-  testAi(input: AiConnectionInput): Promise<{ ok: boolean; message: string }>
-  sendAi(connId: string, text: string, convId: string): Promise<void>
-  stopAi(): Promise<void>
-  resetAi(): Promise<void>
-  approveAi(callId: string, ok: boolean): Promise<void>
-  onAiEvent(cb: (event: AiEvent) => void): () => void
   listSsh(): Promise<SshConnection[]>
   saveSsh(input: SshConnectionInput): Promise<SshConnection[]>
   deleteSsh(id: string): Promise<SshConnection[]>
@@ -590,6 +545,8 @@ export interface Api {
   getUpdate(): Promise<UpdateStatus>
   checkUpdate(): Promise<void>
   installUpdate(): Promise<void>
+  getNotes(): Promise<Note[]>
+  saveNotes(notes: Note[]): Promise<void>
   onUpdate(cb: (status: UpdateStatus) => void): () => void
   onThemeCookie(cb: (value: string | null) => void): () => void
   onToast(cb: (toast: ToastMessage) => void): () => void
