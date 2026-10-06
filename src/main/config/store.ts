@@ -12,6 +12,11 @@ export const panelSchema = z.object({
   url: httpUrlSchema,
   icon: z.string().max(30).optional(),
   siteUrl: httpUrlSchema.optional(), // sitio oficial: de ahí se baja el icono
+  mapKind: z.enum(['service', 'router', 'switch', 'ap', 'nas', 'other']).optional(),
+  mapLink: z
+    .string()
+    .regex(/^[^\u0000-\u001f]{1,150}$/)
+    .optional(),
   iconData: z
     .string()
     .regex(/^data:image\/(png|x-icon|svg\+xml|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/)

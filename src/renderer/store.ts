@@ -18,13 +18,14 @@ import {
   type UpdateStatus,
   type ViewState
 } from '../shared/types'
+import type { MapInput } from '../shared/map'
 import { defaultLayout, organize, type LayoutSection, type SidebarLayout } from '../shared/layout'
 import { errMsg, t } from './i18n'
 import { pushData } from './sshBus'
 
 export type ItemKind = 'panel' | 'ssh' | 'session' | 'folder'
 
-export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'notes'
+export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'notes' | 'map'
 
 export interface ConfirmState {
   title: string
@@ -67,6 +68,7 @@ interface State {
   init: () => Promise<void>
   selectPanel: (id: string) => void
   openNotes: () => void
+  openMap: () => void
   openSettings: (anchor?: string) => void
   closeSettings: () => void
   openWizard: () => void
@@ -136,6 +138,18 @@ export function resolvePanel(panels: Panel[], p: Panel): Panel {
 
 export const listedPanels = (panels: Panel[]): Panel[] => panels.filter((p) => p.kind !== 'tab')
 
+// Lo que el mapa de red sabe de la infraestructura (también alimenta el selector «Conectado a»)
+export function mapInputOf(s: Pick<State, 'pve' | 'snapshot' | 'panels' | 'layout' | 'ui'>): MapInput {
+  return {
+    pve: s.pve ? { host: s.pve.host, port: s.pve.port } : null,
+    nodes: s.snapshot.nodes.map((n) => ({ name: n.name, online: n.online })),
+    guests: s.snapshot.guests.map((g) => ({ key: g.key, vmid: g.vmid, name: g.name, node: g.node, type: g.type, status: g.status, ips: g.ips, template: g.template })),
+    panels: listedPanels(s.panels).map((p) => ({ id: p.id, name: p.name, url: p.url, vmid: p.vmid, mapKind: p.mapKind, mapLink: p.mapLink })),
+    folders: s.layout.folders.filter((f) => f.section === 'panels').map((f) => ({ id: f.id, name: f.name })),
+    showTemplates: s.ui.showTemplates
+  }
+}
+
 // Paneles en el orden en que se ven en la barra lateral (fijados, carpetas, sueltos): lo que recorren Ctrl+1..9
 export function visiblePanels(panels: Panel[], layout: SidebarLayout): Panel[] {
   const o = organize(listedPanels(panels), layout, 'panels')
@@ -183,7 +197,7 @@ export const useStore = create<State>((set, get) => ({
     wantedId = ui.lastActiveId
     const activeId = panels.find((p) => p.id === ui.lastActiveId)?.id ?? listedPanels(panels)[0]?.id ?? null
     // Sin conexión configurada se abre el asistente (se puede omitir)
-    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : 'view'
+    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : 'map'
     set({ ready: true, panels, ui, pve, snapshot, themeCookie, activeId, page, layout })
 
     if (!listening) {
@@ -237,7 +251,7 @@ export const useStore = create<State>((set, get) => ({
       window.api.onShortcut((sc) => handleShortcut(sc))
     }
 
-    await window.api.showView(page === 'view' ? activeId : null)
+    await window.api.showView(null) // se arranca en el mapa (o en el asistente): ninguna vista web delante
   },
 
   selectPanel: (id) => {
@@ -247,6 +261,10 @@ export const useStore = create<State>((set, get) => ({
     void window.api.showView(id)
   },
 
+  openMap: () => {
+    set({ page: 'map', menu: null, itemMenu: null, searchOpen: false })
+    void window.api.showView(null)
+  },
   openNotes: () => {
     set({ page: 'notes', menu: null, itemMenu: null, searchOpen: false })
     void window.api.showView(null)
@@ -265,8 +283,8 @@ export const useStore = create<State>((set, get) => ({
     void window.api.showView(null)
   },
   closeWizard: () => {
-    set({ page: 'view' })
-    void window.api.showView(get().activeId)
+    set({ page: 'map' })
+    void window.api.showView(null)
   },
 
   saveManualPanels: async (panels) => {

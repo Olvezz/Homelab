@@ -1,4 +1,5 @@
 import type { SidebarLayout } from './layout'
+import type { MapKind } from './map'
 // Tipos y constantes compartidos entre main, preload y renderer.
 
 export const TOOLBAR_HEIGHT = 40
@@ -84,6 +85,8 @@ export interface Panel {
   url: string // http(s)://ip:puerto
   icon?: string // opcional: clave de icono (logo de marca o `ui:…`); si falta se asigna sola
   siteUrl?: string // opcional: sitio oficial del servicio (ayuda a reconocerlo y de él se baja el icono)
+  mapKind?: MapKind // qué es en el mapa de red (servicio por defecto, o router, switch, AP…)
+  mapLink?: string // a qué cuelga en el mapa; sin valor = según su IP
   iconData?: string // icono bajado del sitio oficial (data URI); se usa si no hay un logo conocido
   source: PanelSource
   vmid?: number

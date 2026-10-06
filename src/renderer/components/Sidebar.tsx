@@ -545,6 +545,23 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
   )
 }
 
+function MapEntry({ collapsed }: { collapsed: boolean }): React.JSX.Element {
+  const page = useStore((s) => s.page)
+  const openMap = useStore((s) => s.openMap)
+  return (
+    <div className="panel-list">
+      <div className={`panel-row${page === 'map' ? ' active' : ''}`}>
+        <button className="panel-item" title={t('mapTitle')} onClick={openMap}>
+          <span className="panel-icon">
+            <Icon k="ui:network" />
+          </span>
+          {!collapsed && <span className="panel-name">{t('mapTitle')}</span>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Tree({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
   const snapshot = useStore((s) => s.snapshot)
   const showTemplates = useStore((s) => s.ui.showTemplates)
@@ -656,6 +673,7 @@ export function Sidebar(): React.JSX.Element {
       </div>
 
       <div className="sidebar-scroll">
+        <MapEntry collapsed={collapsed} />
         <PinnedList collapsed={collapsed} />
 
         {!collapsed && <div className="sidebar-section">{t('proxmox')}</div>}

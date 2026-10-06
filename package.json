@@ -17,6 +17,7 @@
     "clean": "node scripts/clean-dist.mjs",
     "release": "npm run clean && npm run build && electron-builder --win --publish always",
     "format": "prettier --write .",
+    "beta": "electron-vite build && electron . --user-data-dir=%APPDATA%\homelab-desktop-beta",
     "bump": "npm version patch --no-git-tag-version",
     "dist": "npm run clean && npm run build && electron-builder --win"
   },

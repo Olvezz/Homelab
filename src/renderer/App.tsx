@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { CertPrompt } from './components/CertPrompt'
 import { Notes } from './components/Notes'
+import { NetworkMap } from './components/NetworkMap'
 import { ConfirmDialog, FolderDialog, GuestMenu, ItemMenu, SearchPalette } from './components/Dialogs'
 import { Settings } from './components/Settings'
 import { SshHostPrompt, SshSecretPrompt } from './components/SshDialogs'
@@ -68,6 +69,7 @@ export function App(): React.JSX.Element {
         {page === 'settings' && <Settings />}
         {page === 'wizard' && <Wizard />}
         {page === 'notes' && <Notes />}
+        {page === 'map' && <NetworkMap />}
         <SshView />
         {page === 'view' && !activeId && <div className="placeholder">{t('selectPanel')}</div>}
       </main>

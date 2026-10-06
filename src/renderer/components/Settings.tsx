@@ -3,19 +3,23 @@ import type { Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult }
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
+import type { MapKind } from '../../shared/map'
 import { Icon, ICON_CHOICES, isKnownIcon, PanelIcon } from './Icon'
+import { KindSelect, LinkSelect } from './NetworkMap'
 
 interface Draft {
   id: string | null // null = panel nuevo
   name: string
   url: string
   siteUrl: string // sitio oficial (opcional)
+  mapKind: MapKind // qué es en el mapa de red
+  mapLink: string // a qué cuelga ('' = según su IP)
   iconData?: string // icono ya bajado de siteUrl
   iconSite?: string // siteUrl del que salió iconData
   icon: string // clave de icono o '' = automático
 }
 
-const emptyDraft: Draft = { id: null, name: '', url: '', siteUrl: '', icon: '' }
+const emptyDraft: Draft = { id: null, name: '', url: '', siteUrl: '', mapKind: 'service', mapLink: '', icon: '' }
 
 function validUrl(raw: string): boolean {
   try {
@@ -760,7 +764,7 @@ export function Settings(): React.JSX.Element {
     const p = manual.find((x) => x.id === panelEdit.id)
     useStore.setState({ editRequest: null })
     if (p) {
-      setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+      setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', mapKind: p.mapKind ?? 'service', mapLink: p.mapLink ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
       setError('')
     }
   }, [panelEdit, manual])
@@ -784,7 +788,12 @@ export function Settings(): React.JSX.Element {
         iconData = (await window.api.fetchPanelIcon(siteUrl).catch(() => null)) ?? undefined
         if (!iconData) showToast('info', t('iconNotFound'))
       }
-      const extra = { siteUrl: siteUrl || undefined, iconData }
+      const extra = {
+        siteUrl: siteUrl || undefined,
+        iconData,
+        mapKind: draft.mapKind === 'service' ? undefined : draft.mapKind,
+        mapLink: draft.mapLink || undefined
+      }
       const next: Panel[] =
         draft.id === null
           ? [...manual, { id: `manual-${crypto.randomUUID()}`, name, url, icon, ...extra, source: 'manual' }]
@@ -886,7 +895,7 @@ export function Settings(): React.JSX.Element {
                 <button
                   className="btn small"
                   onClick={() => {
-                    setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+                    setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', mapKind: p.mapKind ?? 'service', mapLink: p.mapLink ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
                     setError('')
                   }}
                 >
@@ -918,6 +927,15 @@ export function Settings(): React.JSX.Element {
                 onChange={(e) => setDraft({ ...draft, siteUrl: e.target.value })}
               />
               <small className="hint">{t('siteUrlHint')}</small>
+            </label>
+            <label className="field">
+              <span>{t('mapKindLabel')}</span>
+              <KindSelect value={draft.mapKind} onChange={(k) => setDraft({ ...draft, mapKind: k })} />
+            </label>
+            <label className="field">
+              <span>{t('mapLinkLabel')}</span>
+              <LinkSelect value={draft.mapLink} selfId={draft.id ?? undefined} onChange={(v) => setDraft({ ...draft, mapLink: v })} />
+              <small className="hint">{t('mapLinkHint')}</small>
             </label>
             <label className="field">
               <span>{t('icon')}</span>
