@@ -1,0 +1,64 @@
+name: Publicar versión
+
+# Cada push a main que cambie la versión de package.json compila el instalador y publica la release v<versión>.
+# Si esa release ya existe no hace nada (se puede relanzar sin duplicar).
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión y release existente
+        id: v
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "La release v$VERSION ya existe: nada que publicar."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.v.outputs.exists == 'false'
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Dependencias, comprobaciones y tests
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Instalador
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          npm run clean
+          npx electron-vite build
+          npx electron-builder --win --publish never
+
+      # Se sube todo de una vez (así no hay releases borrador duplicadas)
+      - name: Publicar release
+        if: steps.v.outputs.exists == 'false'
+        shell: bash
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" \
+            dist/*.exe dist/*.exe.blockmap dist/latest.yml \
+            --title "${{ steps.v.outputs.version }}" \
+            --notes "$(git log -1 --pretty=%B)" \
+            --latest

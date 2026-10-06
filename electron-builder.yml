@@ -8,6 +8,7 @@ files:
   - resources/**/*
 win:
   target: nsis
+  artifactName: HomeLab-Desktop-Setup-${version}.${ext}
   icon: resources/icon.png
 nsis:
   oneClick: false

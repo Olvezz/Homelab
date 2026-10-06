@@ -1,6 +1,6 @@
 {
   "name": "homelab-desktop",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "HomeLab Desktop: Proxmox y paneles de servicios en una sola ventana",
   "main": "./out/main/index.js",
   "author": "Olvezz",
@@ -17,6 +17,7 @@
     "clean": "node scripts/clean-dist.mjs",
     "release": "npm run clean && npm run build && electron-builder --win --publish always",
     "format": "prettier --write .",
+    "bump": "npm version patch --no-git-tag-version",
     "dist": "npm run clean && npm run build && electron-builder --win"
   },
   "dependencies": {

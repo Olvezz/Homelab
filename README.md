@@ -147,9 +147,14 @@ Todos los iconos son SVG monocromos que toman el color del tema (logos de [Simpl
 
 ### Publicar una actualización
 
-1. Sube `version` en `package.json` (p. ej. 0.2.1).
-2. Con un token de GitHub con permiso `repo` en la variable `GH_TOKEN`: `npm run release` (compila, genera el instalador y `latest.yml` y los sube como release).
-3. Las instalaciones existentes la detectan en ≤ 6 h o al pulsar *Buscar ahora*.
+Cada cambio sube el **tercer número** de la versión (0.9.0 → 0.9.1 → 0.9.2…); el segundo se reserva para funciones grandes.
+
+1. `npm run bump` sube el tercer número en `package.json`.
+2. Commit y `git push` a `main`.
+3. El workflow `.github/workflows/release.yml` (GitHub Actions) comprueba tipos y tests, genera el instalador y `latest.yml` y publica la release `v<versión>`. Si esa release ya existe, no hace nada.
+4. Las instalaciones existentes la detectan en ≤ 6 h o al pulsar *Buscar ahora*.
+
+Publicar a mano (sin Actions): con un token con permiso `repo` en `GH_TOKEN`, `npm run release`. Ojo: electron-builder puede dejar la release como borrador y duplicada; el workflow evita eso subiendo todo de una vez.
 
 > Nota: el instalador no está firmado con certificado de código. La integridad de las actualizaciones se apoya en HTTPS y en el hash de `latest.yml`; quien controle el repositorio controla las actualizaciones.
 
