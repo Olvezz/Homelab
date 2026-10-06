@@ -27,13 +27,28 @@ export const KIND_KEY: Record<MapKind, Key> = {
 }
 
 // Entrada del mapa a partir del estado de la app (se recalcula solo cuando cambia algo relevante)
-function useMapInput(): ReturnType<typeof mapInputOf> {
+interface Grouping {
+  tags: boolean
+  folders: boolean
+}
+const GROUP_KEY = 'homelab.map.grouping'
+
+function loadGrouping(): Grouping {
+  try {
+    const raw = JSON.parse(localStorage.getItem(GROUP_KEY) ?? '')
+    return { tags: raw.tags !== false, folders: raw.folders !== false }
+  } catch {
+    return { tags: true, folders: true }
+  }
+}
+
+function useMapInput(group: Grouping = { tags: false, folders: false }): ReturnType<typeof mapInputOf> {
   const pve = useStore((s) => s.pve)
   const snapshot = useStore((s) => s.snapshot)
   const panels = useStore((s) => s.panels)
   const layout = useStore((s) => s.layout)
   const ui = useStore((s) => s.ui)
-  return useMemo(() => mapInputOf({ pve, snapshot, panels, layout, ui }), [pve, snapshot, panels, layout, ui])
+  return useMemo(() => mapInputOf({ pve, snapshot, panels, layout, ui }, group), [pve, snapshot, panels, layout, ui, group.tags, group.folders])
 }
 
 // Selector «Conectado a»: red, nodo, máquina, dispositivo o carpeta (se usa al crear un panel y en el panel lateral del mapa)
@@ -87,7 +102,8 @@ function openNode(n: SimNode): void {
 }
 
 export function NetworkMap(): React.JSX.Element {
-  const input = useMapInput()
+  const [group, setGroup] = useState<Grouping>(loadGrouping)
+  const input = useMapInput(group)
   const nodes = useMemo(() => buildMap(input), [input])
   // Solo se recarga el grafo si el contenido cambió de verdad (los sondeos de Proxmox renuevan el estado cada pocos segundos)
   const sig = useMemo(() => JSON.stringify(nodes), [nodes])
@@ -124,6 +140,14 @@ export function NetworkMap(): React.JSX.Element {
   }, [sig])
 
   const engine = engineRef.current
+  const changeGroup = (g: Grouping): void => {
+    setGroup(g)
+    try {
+      localStorage.setItem(GROUP_KEY, JSON.stringify(g))
+    } catch {
+      // sin almacenamiento: la opción vale solo en esta sesión
+    }
+  }
   const manual = panels.filter((p) => p.source === 'manual' && p.kind !== 'tab')
   const editPanel = (id: string, patch: Partial<Pick<Panel, 'mapKind' | 'mapLink'>>): void => {
     void saveManualPanels(manual.map((p) => (p.id === id ? { ...p, ...patch } : p))).catch((e) => showToast('error', errMsg(e)))
@@ -258,11 +282,22 @@ export function NetworkMap(): React.JSX.Element {
             engine?.search(e.target.value)
           }}
         />
+        <label className="map-check" title={t('mapGroupTagsHint')}>
+          <input type="checkbox" checked={group.tags} onChange={(e) => changeGroup({ ...group, tags: e.target.checked })} />
+          {t('mapGroupTags')}
+        </label>
+        <label className="map-check" title={t('mapGroupFoldersHint')}>
+          <input type="checkbox" checked={group.folders} onChange={(e) => changeGroup({ ...group, folders: e.target.checked })} />
+          {t('mapGroupFolders')}
+        </label>
         <button className="btn small" onClick={() => engine?.expandAll()}>
           {t('mapExpandAll')}
         </button>
         <button className="btn small" onClick={() => engine?.collapse()}>
           {t('mapCollapse')}
+        </button>
+        <button className="btn small" onClick={() => engine?.tidy()} title={t('mapTidyHint')}>
+          {t('mapTidy')}
         </button>
         <button className="btn small primary" onClick={() => engine?.fit()}>
           {t('mapFit')}

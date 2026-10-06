@@ -162,3 +162,43 @@ describe('linkTargets', () => {
     expect(linkTargets(input, 'router').some((x) => x.value === 'p:router')).toBe(false)
   })
 })
+
+describe('agrupación por tags y carpetas', () => {
+  const tagged = (): MapInput => {
+    const input = base()
+    input.guests[0].tags = ['red', 'web-8080'] // adguard
+    input.guests[1].tags = ['red'] // tailscale
+    input.guests[2].tags = ['docker'] // solo uno con este tag: no se agrupa
+    return input
+  }
+  it('sin la opción, las máquinas cuelgan del nodo', () => {
+    expect(by(buildMap(tagged()), 'g:proxmox/100').parent).toBe('n:proxmox')
+  })
+  it('con tags, las máquinas que comparten uno se agrupan bajo su nodo (ignorando web-<puerto>)', () => {
+    const n = buildMap({ ...tagged(), groupByTags: true })
+    expect(by(n, 'tag:proxmox:red')).toMatchObject({ type: 'folder', label: 'red', parent: 'n:proxmox' })
+    expect(by(n, 'g:proxmox/100').parent).toBe('tag:proxmox:red')
+    expect(by(n, 'g:proxmox/101').parent).toBe('tag:proxmox:red')
+    expect(by(n, 'g:proxmox/102').parent).toBe('n:proxmox')
+    expect(n.find((x) => x.id === 'tag:proxmox:web-8080')).toBeUndefined()
+  })
+  it('los servicios siguen colgando de su máquina aunque esta esté en un grupo', () => {
+    const n = buildMap({ ...tagged(), groupByTags: true })
+    expect(by(n, 'p:adg').parent).toBe('g:proxmox/100')
+  })
+  it('con carpetas, el panel de una carpeta del usuario cuelga de ella', () => {
+    const input = { ...base(), folders: [{ id: 'mm', name: 'Multimedia' }], groupByFolders: true }
+    input.panels.find((p) => p.id === 'jf')!.folder = 'mm'
+    const n = buildMap(input)
+    expect(by(n, 'p:jf').parent).toBe('f:mm')
+    expect(by(n, 'f:mm').label).toBe('Multimedia')
+  })
+  it('sin la opción la carpeta del usuario no cambia el sitio, y un enlace manual manda sobre ella', () => {
+    const input = { ...base(), folders: [{ id: 'mm', name: 'Multimedia' }] }
+    input.panels.find((p) => p.id === 'jf')!.folder = 'mm'
+    expect(by(buildMap(input), 'p:jf').parent).not.toBe('f:mm')
+    const linked = { ...input, groupByFolders: true }
+    linked.panels.find((p) => p.id === 'jf')!.mapLink = 'g:proxmox/104'
+    expect(by(buildMap(linked), 'p:jf').parent).toBe('g:proxmox/104')
+  })
+})

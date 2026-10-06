@@ -139,14 +139,16 @@ export function resolvePanel(panels: Panel[], p: Panel): Panel {
 export const listedPanels = (panels: Panel[]): Panel[] => panels.filter((p) => p.kind !== 'tab')
 
 // Lo que el mapa de red sabe de la infraestructura (también alimenta el selector «Conectado a»)
-export function mapInputOf(s: Pick<State, 'pve' | 'snapshot' | 'panels' | 'layout' | 'ui'>): MapInput {
+export function mapInputOf(s: Pick<State, 'pve' | 'snapshot' | 'panels' | 'layout' | 'ui'>, group: { tags: boolean; folders: boolean } = { tags: false, folders: false }): MapInput {
   return {
     pve: s.pve ? { host: s.pve.host, port: s.pve.port } : null,
     nodes: s.snapshot.nodes.map((n) => ({ name: n.name, online: n.online })),
-    guests: s.snapshot.guests.map((g) => ({ key: g.key, vmid: g.vmid, name: g.name, node: g.node, type: g.type, status: g.status, ips: g.ips, template: g.template })),
-    panels: listedPanels(s.panels).map((p) => ({ id: p.id, name: p.name, url: p.url, vmid: p.vmid, mapKind: p.mapKind, mapLink: p.mapLink })),
+    guests: s.snapshot.guests.map((g) => ({ key: g.key, vmid: g.vmid, name: g.name, node: g.node, type: g.type, status: g.status, ips: g.ips, template: g.template, tags: g.tags })),
+    panels: listedPanels(s.panels).map((p) => ({ id: p.id, name: p.name, url: p.url, vmid: p.vmid, mapKind: p.mapKind, mapLink: p.mapLink, folder: s.layout.folderOf[p.id] })),
     folders: s.layout.folders.filter((f) => f.section === 'panels').map((f) => ({ id: f.id, name: f.name })),
-    showTemplates: s.ui.showTemplates
+    showTemplates: s.ui.showTemplates,
+    groupByTags: group.tags,
+    groupByFolders: group.folders
   }
 }
 

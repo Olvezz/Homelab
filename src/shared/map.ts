@@ -21,14 +21,17 @@ export interface MapNode {
   guestKey?: string
   vmid?: number
   deviceKind?: MapKind
-  category?: boolean // carpeta creada sola para agrupar servicios
+  category?: boolean // carpeta creada sola para agrupar servicios (empieza cerrada)
+  tagGroup?: boolean // carpeta creada sola por un tag de Proxmox
 }
 
 export interface MapInput {
   pve: { host: string; port: number } | null
   nodes: { name: string; online: boolean }[]
-  guests: { key: string; vmid: number; name: string; node: string; type: 'qemu' | 'lxc'; status: string; ips: string[]; template: boolean }[]
-  panels: { id: string; name: string; url: string; vmid?: number; mapKind?: MapKind; mapLink?: string }[]
+  guests: { key: string; vmid: number; name: string; node: string; type: 'qemu' | 'lxc'; status: string; ips: string[]; template: boolean; tags?: string[] }[]
+  panels: { id: string; name: string; url: string; vmid?: number; mapKind?: MapKind; mapLink?: string; folder?: string }[]
+  groupByTags?: boolean // agrupa las máquinas de un nodo por su tag de Proxmox
+  groupByFolders?: boolean // los paneles que están en una carpeta del usuario cuelgan de ella
   folders: { id: string; name: string }[] // carpetas del usuario: destinos de enlace
   showTemplates?: boolean
 }
@@ -84,6 +87,11 @@ function netOf(h: string): { key: string; label: string } {
     return { key: `${a}.${b}.${c}`, label: `LAN ${a}.${b}.${c}.0/24` }
   }
   return { key: '', label: 'LAN' }
+}
+
+// Tag de Proxmox que sirve para agrupar: los de descubrimiento de paneles (web-8080) no son agrupaciones
+export function groupTag(tags: string[] | undefined): string | undefined {
+  return (tags ?? []).map((t) => t.trim()).find((t) => t && !/^web-\d+(-https)?$/i.test(t))
 }
 
 function categoryOf(name: string): string {
@@ -144,12 +152,27 @@ export function buildMap(input: MapInput): MapNode[] {
   }
   const nodeByIp = singleNode ? out.find((n) => n.type === 'node') : undefined
 
-  // VMs y contenedores, colgados de su nodo
+  // VMs y contenedores, colgados de su nodo (o de la carpeta de su tag, si se agrupa por tags)
   const guestByIp = new Map<string, MapNode>()
   const guestByVmid = new Map<number, MapNode>()
+  const tagOf = (g: MapInput['guests'][number]): string | undefined => groupTag(g.tags)
+  const tagCount = new Map<string, number>()
+  if (input.groupByTags) {
+    for (const g of input.guests) {
+      const tag = tagOf(g)
+      if (tag && !(g.template && !input.showTemplates)) tagCount.set(`${g.node}:${tag}`, (tagCount.get(`${g.node}:${tag}`) ?? 0) + 1)
+    }
+  }
   for (const g of input.guests) {
     if (g.template && !input.showTemplates) continue
-    const parent = have.has(`n:${g.node}`) ? `n:${g.node}` : ensureNet(primary.key, primary.label)
+    let parent = have.has(`n:${g.node}`) ? `n:${g.node}` : ensureNet(primary.key, primary.label)
+    const tag = input.groupByTags ? tagOf(g) : undefined
+    const count = tag ? (tagCount.get(`${g.node}:${tag}`) ?? 0) : 0
+    if (tag && count >= 2) {
+      const id = `tag:${g.node}:${tag}`
+      if (!have.has(id)) add({ id, type: 'folder', label: tag, sub: `${count} máquinas`, status: 'unknown', parent, tagGroup: true })
+      parent = id
+    }
     const n = add({
       id: `g:${g.key}`,
       type: g.type === 'lxc' ? 'lxc' : 'vm',
@@ -214,7 +237,8 @@ export function buildMap(input: MapInput): MapNode[] {
   for (const p of input.panels) {
     if (merged.has(p.id)) continue
     autoOf.set(p.id, autoParent(p))
-    wanted.set(p.id, resolveLink(p.mapLink, p.id) ?? autoOf.get(p.id)!)
+    const byFolder = input.groupByFolders && p.folder ? resolveLink(`f:${p.folder}`, p.id) : null
+    wanted.set(p.id, resolveLink(p.mapLink, p.id) ?? byFolder ?? autoOf.get(p.id)!)
   }
   // Ciclos entre paneles (A cuelga de B y B de A): el enlace que cierra el ciclo se ignora
   for (const id of wanted.keys()) {

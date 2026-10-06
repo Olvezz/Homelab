@@ -2406,3 +2406,20 @@ ul.blocked {
     border-top: 1px solid var(--border-muted);
   }
 }
+
+.map-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-bar {
+  flex-wrap: wrap;
+  padding-block: 8px;
+  height: auto;
+  min-height: 52px;
+}

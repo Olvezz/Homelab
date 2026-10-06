@@ -1,11 +1,15 @@
-// Motor del grafo del mapa de red: fuerzas + canvas. Sin React: la pantalla le pasa los nodos y recibe eventos.
+// Motor del mapa de red: disposición fija en árbol (de izquierda a derecha) + canvas. Sin física: cada nodo
+// tiene su sitio calculado y solo se desliza hasta él con una animación suave (sin rebote).
+// Sin React: la pantalla le pasa los nodos y recibe eventos.
 import type { MapNode, MapNodeType } from '../shared/map'
 
 export interface SimNode extends MapNode {
   x: number
   y: number
-  vx: number
-  vy: number
+  tx: number // sitio calculado por la disposición
+  ty: number
+  ox: number // desplazamiento manual (al arrastrar el nodo)
+  oy: number
   children: SimNode[]
   expanded: boolean
   matched?: boolean
@@ -23,8 +27,11 @@ export const NODE_COLORS: Record<MapNodeType, string> = {
   service: '#60a5fa',
   ext: '#fb7185'
 }
-const RADIUS: Record<MapNodeType, number> = { root: 24, net: 19, folder: 15, node: 21, vm: 17, lxc: 17, device: 17, service: 11, ext: 11 }
-const GLYPH: Partial<Record<MapNodeType, string>> = { root: '⌂', net: 'LAN', node: 'PVE', vm: 'VM', lxc: 'CT', device: '◈' }
+const RADIUS: Record<MapNodeType, number> = { root: 22, net: 18, folder: 14, node: 20, vm: 16, lxc: 16, device: 16, service: 11, ext: 11 }
+const GLYPH: Partial<Record<MapNodeType, string>> = { net: 'LAN', node: 'PVE', vm: 'VM', lxc: 'CT', device: '◈' }
+
+const COL = 215 // separación entre niveles
+const ROW = 54 // separación entre filas
 
 export interface EngineHooks {
   onSelect: (n: SimNode | null) => void
@@ -53,7 +60,6 @@ export class MapEngine {
   private panning = false
   private moved = false
   private last = { x: 0, y: 0 }
-  private heat = 1
   private matchSet: Set<SimNode> | null = null
   private raf = 0
   private frame = 0
@@ -61,6 +67,7 @@ export class MapEngine {
   private ro: ResizeObserver
   private ctx: CanvasRenderingContext2D
   private fitted = false
+  private dirty = true // hay que recalcular la disposición
 
   constructor(
     private cv: HTMLCanvasElement,
@@ -92,41 +99,48 @@ export class MapEngine {
 
   // ---- datos ----
 
-  // Carga un árbol nuevo conservando posición y carpetas abiertas de los nodos que ya estaban
+  // Carga un árbol nuevo conservando posición, desplazamientos y carpetas abiertas de los nodos que ya estaban
   setNodes(list: MapNode[]): void {
     const old = this.byId
-    const next: SimNode[] = []
     const map = new Map<string, SimNode>()
-    for (const m of list) {
+    const next: SimNode[] = list.map((m) => {
       const prev = old.get(m.id)
       const n: SimNode = {
         ...m,
         children: [],
         x: prev?.x ?? 0,
         y: prev?.y ?? 0,
-        vx: 0,
-        vy: 0,
-        expanded: prev ? prev.expanded : defaultExpanded(m)
+        tx: 0,
+        ty: 0,
+        ox: prev?.ox ?? 0,
+        oy: prev?.oy ?? 0,
+        expanded: prev ? prev.expanded : !(m.type === 'folder' && m.category)
       }
-      next.push(n)
       map.set(n.id, n)
-    }
+      return n
+    })
     for (const n of next) {
       const p = n.parent ? map.get(n.parent) : undefined
       if (p) p.children.push(n)
-      if (!old.has(n.id)) {
-        n.x = (p?.x ?? 0) + (Math.random() - 0.5) * 160
-        n.y = (p?.y ?? 0) + (Math.random() - 0.5) * 160
-      }
+    }
+    // los nodos nuevos nacen en su padre y se deslizan hasta su sitio
+    for (const n of next) {
+      if (old.has(n.id)) continue
+      const p = n.parent ? map.get(n.parent) : undefined
+      n.x = p?.x ?? 0
+      n.y = p?.y ?? 0
     }
     this.nodes = next
     this.byId = map
     this.selected = this.selected ? (map.get(this.selected.id) ?? null) : null
     this.hover = null
     this.matchSet = null
-    this.heat = old.size === 0 ? 1 : 0.6
+    this.layout()
     if (old.size === 0) {
-      for (let i = 0; i < 400; i++) this.step() // asienta el grafo antes de mostrarlo
+      for (const n of next) {
+        n.x = n.tx
+        n.y = n.ty
+      }
       this.fit()
     }
     this.hooks.onChange()
@@ -171,7 +185,7 @@ export class MapEngine {
       }
     }
     this.matchSet = set
-    this.heat = 1
+    this.dirty = true
     this.hooks.onChange()
   }
 
@@ -185,19 +199,29 @@ export class MapEngine {
     this.afterToggle()
   }
 
+  // Devuelve cada nodo a su sitio calculado (descarta lo que se arrastró a mano)
+  tidy(): void {
+    for (const n of this.nodes) n.ox = n.oy = 0
+    this.dirty = true
+    setTimeout(() => this.fit(), 350)
+  }
+
   private afterToggle(): void {
-    this.heat = 1
+    this.dirty = true
     this.hooks.onChange()
-    setTimeout(() => this.fit(), 700)
+    setTimeout(() => this.fit(), 350)
   }
 
   toggle(n: SimNode, force?: boolean): void {
-    n.expanded = force === undefined ? !n.expanded : force
-    if (n.expanded) for (const c of n.children) {
-      c.x = n.x + (Math.random() - 0.5) * 60
-      c.y = n.y + (Math.random() - 0.5) * 60
+    const open = force === undefined ? !n.expanded : force
+    if (open && !n.expanded) {
+      for (const c of n.children) {
+        c.x = n.x // los hijos salen del padre
+        c.y = n.y
+      }
     }
-    this.heat = 1
+    n.expanded = open
+    this.dirty = true
     this.hooks.onChange()
   }
 
@@ -207,6 +231,7 @@ export class MapEngine {
   }
 
   fit(): void {
+    if (this.dirty) this.layout()
     const vs = this.visible()
     if (!vs.length || !this.W) return
     let x0 = 1e9
@@ -214,72 +239,60 @@ export class MapEngine {
     let x1 = -1e9
     let y1 = -1e9
     for (const n of vs) {
-      x0 = Math.min(x0, n.x)
-      x1 = Math.max(x1, n.x)
-      y0 = Math.min(y0, n.y)
-      y1 = Math.max(y1, n.y)
+      const gx = n.tx + n.ox
+      const gy = n.ty + n.oy
+      x0 = Math.min(x0, gx)
+      x1 = Math.max(x1, gx)
+      y0 = Math.min(y0, gy)
+      y1 = Math.max(y1, gy)
     }
-    const pad = 90
-    const k = Math.min((this.W - pad * 2) / Math.max(x1 - x0, 1), (this.H - pad * 2) / Math.max(y1 - y0, 1), 1.4)
-    this.view.k = k
-    this.view.x = this.W / 2 - ((x0 + x1) / 2) * k
-    this.view.y = this.H / 2 - ((y0 + y1) / 2) * k
+    const label = 150 // lo que ocupa el nombre del último nivel, a la derecha del nodo
+    const padX = 50
+    const padY = 60
+    const k = Math.min((this.W - padX * 2) / Math.max(x1 - x0 + label, 1), (this.H - padY * 2) / Math.max(y1 - y0, 1), 1.3)
+    this.view.k = Math.max(k, 0.3)
+    this.view.x = this.W / 2 - ((x0 + x1 + label) / 2) * this.view.k
+    this.view.y = this.H / 2 - ((y0 + y1) / 2) * this.view.k
     this.fitted = true
   }
 
-  // ---- simulación ----
+  // ---- disposición ----
 
-  private step(): void {
-    const vs = this.visible()
-    for (let i = 0; i < vs.length; i++) {
-      const a = vs[i]
-      for (let j = i + 1; j < vs.length; j++) {
-        const b = vs[j]
-        const dx = a.x - b.x
-        const dy = a.y - b.y
-        const d2 = dx * dx + dy * dy + 0.01
-        const d = Math.sqrt(d2)
-        const f = 11000 / d2
-        const fx = (dx / d) * f
-        const fy = (dy / d) * f
-        a.vx += fx
-        a.vy += fy
-        b.vx -= fx
-        b.vy -= fy
+  // Árbol de izquierda a derecha: una fila por hoja visible y cada padre centrado sobre sus hijos
+  private layout(): void {
+    let row = 0
+    const place = (n: SimNode, depth: number): void => {
+      n.tx = depth * COL
+      const kids = n.expanded ? n.children : []
+      if (kids.length === 0) {
+        n.ty = row++ * ROW
+        return
       }
-      a.vx -= a.x * 0.0025 // gravedad suave
-      a.vy -= a.y * 0.0025
+      for (const c of kids) place(c, depth + 1)
+      n.ty = (kids[0].ty + kids[kids.length - 1].ty) / 2
     }
-    for (const n of vs) {
-      const p = n.parent ? this.byId.get(n.parent) : undefined
-      if (!p) continue
-      const len = n.type === 'service' || n.type === 'ext' ? 85 : n.type === 'folder' ? 120 : 150
-      const dx = n.x - p.x
-      const dy = n.y - p.y
-      const d = Math.sqrt(dx * dx + dy * dy) || 1
-      const f = (d - len) * 0.035
-      n.vx -= (dx / d) * f
-      n.vy -= (dy / d) * f
-      p.vx += (dx / d) * f
-      p.vy += (dy / d) * f
+    for (const r of this.nodes.filter((n) => !n.parent)) place(r, 0)
+    this.dirty = false
+  }
+
+  // Un paso de la animación: cada nodo se acerca a su sitio sin pasarse (no hay rebote)
+  private tick(): void {
+    if (this.dirty) this.layout()
+    for (const n of this.visible()) {
+      if (n === this.dragNode) continue
+      const gx = n.tx + n.ox
+      const gy = n.ty + n.oy
+      n.x += (gx - n.x) * 0.2
+      n.y += (gy - n.y) * 0.2
+      if (Math.abs(gx - n.x) < 0.1) n.x = gx
+      if (Math.abs(gy - n.y) < 0.1) n.y = gy
     }
-    for (const n of vs) {
-      if (n === this.dragNode) {
-        n.vx = n.vy = 0
-        continue
-      }
-      n.vx *= 0.82
-      n.vy *= 0.82
-      n.x += n.vx * this.heat
-      n.y += n.vy * this.heat
-    }
-    this.heat = Math.max(0.12, this.heat * 0.995)
   }
 
   // ---- dibujo ----
 
   private loop = (): void => {
-    this.step()
+    this.tick()
     this.draw()
     this.raf = requestAnimationFrame(this.loop)
   }
@@ -327,30 +340,12 @@ export class MapEngine {
     const hl = this.focusSet()
     const dim = (n: SimNode): boolean => (!!focus && !hl.has(n)) || (!!this.matchSet && !this.matchSet.has(n))
 
-    // halos: las carpetas y máquinas abiertas se rodean de una zona tenue con sus hijos
-    for (const n of vs) {
-      const kids = n.children.filter((c) => vs.includes(c))
-      if (!n.expanded || kids.length < 2 || n.type === 'root' || n.type === 'net') continue
-      let r = 0
-      for (const c of kids) r = Math.max(r, Math.hypot(c.x - n.x, c.y - n.y))
-      ctx.globalAlpha = dim(n) ? 0.04 : 1
-      ctx.beginPath()
-      ctx.arc(n.x, n.y, r + 44, 0, Math.PI * 2)
-      ctx.fillStyle = hexA(NODE_COLORS[n.type], 0.045)
-      ctx.fill()
-      ctx.setLineDash([5, 5])
-      ctx.strokeStyle = hexA(NODE_COLORS[n.type], 0.22)
-      ctx.lineWidth = 1.2
-      ctx.stroke()
-      ctx.setLineDash([])
-    }
-
-    // aristas: curvas con degradado del color del padre al del hijo
+    // aristas: curvas horizontales con degradado del color del padre al del hijo
     for (const n of vs) {
       const p = n.parent ? this.byId.get(n.parent) : undefined
       if (!p) continue
       const on = !!focus && hl.has(n) && hl.has(p)
-      ctx.globalAlpha = dim(n) ? 0.07 : on ? 1 : 0.7
+      ctx.globalAlpha = dim(n) ? 0.07 : on ? 1 : 0.75
       const g = ctx.createLinearGradient(p.x, p.y, n.x, n.y)
       g.addColorStop(0, hexA(NODE_COLORS[p.type], on ? 0.95 : 0.5))
       g.addColorStop(1, hexA(NODE_COLORS[n.type], on ? 0.95 : 0.5))
@@ -363,7 +358,7 @@ export class MapEngine {
       ctx.stroke()
     }
 
-    // nodos: orbe translúcido con borde y núcleo brillante
+    // nodos: orbe translúcido con borde y núcleo brillante; el nombre a la derecha
     for (const n of vs) {
       const r = RADIUS[n.type]
       const col = n.status === 'stopped' ? '#6b7280' : NODE_COLORS[n.type]
@@ -374,7 +369,7 @@ export class MapEngine {
         ctx.shadowBlur = 24
       }
       ctx.beginPath()
-      ctx.arc(n.x, n.y, r * (n === this.hover ? 1.12 : 1), 0, Math.PI * 2)
+      ctx.arc(n.x, n.y, r * (n === this.hover ? 1.1 : 1), 0, Math.PI * 2)
       ctx.fillStyle = hexA(col, 0.2)
       ctx.fill()
       ctx.lineWidth = 2
@@ -383,7 +378,6 @@ export class MapEngine {
       ctx.stroke()
       ctx.setLineDash([])
       ctx.shadowBlur = 0
-      // núcleo
       ctx.beginPath()
       ctx.arc(n.x, n.y, Math.max(3.5, r * 0.34), 0, Math.PI * 2)
       ctx.fillStyle = col
@@ -393,14 +387,13 @@ export class MapEngine {
       }
       ctx.fill()
       ctx.shadowBlur = 0
-      // glifo (solo en los tipos grandes)
       const glyph = n.type === 'folder' ? (n.expanded ? '−' : `+${n.children.length}`) : GLYPH[n.type]
-      if (glyph && r >= 15 && n.type !== 'root') {
+      if (glyph && r >= 14) {
         ctx.fillStyle = pal.text
         ctx.font = '700 9px system-ui'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(glyph, n.x, n.y + r * 0.72 + 1)
+        ctx.fillText(glyph, n.x, n.y + r * 0.7 + 1)
       }
       if (n.status === 'running') {
         ctx.beginPath()
@@ -411,17 +404,16 @@ export class MapEngine {
         ctx.lineWidth = 1.5
         ctx.stroke()
       }
-      // etiquetas
-      ctx.fillStyle = pal.text
-      ctx.font = `${n.type === 'root' ? 700 : 600} 12px system-ui`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
-      ctx.fillText(n.label, n.x, n.y + r + 5)
       const sub = n.port ? `${n.ip ?? ''}:${n.port}` : (n.ip ?? n.sub ?? '')
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = pal.text
+      ctx.font = `${n.type === 'root' ? 700 : 600} 12.5px system-ui`
+      ctx.fillText(n.label, n.x + r + 9, n.y - (sub ? 7 : 0))
       if (sub) {
         ctx.fillStyle = pal.dim
         ctx.font = '10.5px ui-monospace, Consolas, monospace'
-        ctx.fillText(sub, n.x, n.y + r + 20)
+        ctx.fillText(sub, n.x + r + 9, n.y + 8)
       }
       if (this.matchSet?.has(n) && n.matched) {
         ctx.globalAlpha = 1
@@ -494,10 +486,14 @@ export class MapEngine {
     const dy = e.offsetY - this.last.y
     if (this.dragNode) {
       if (Math.hypot(dx, dy) > 3) this.moved = true
-      const w = this.world(e.offsetX, e.offsetY)
-      this.dragNode.x = w.x
-      this.dragNode.y = w.y
-      this.heat = 0.6
+      if (this.moved) {
+        // el nodo se queda donde se suelta: se guarda como desplazamiento sobre su sitio calculado
+        const w = this.world(e.offsetX, e.offsetY)
+        this.dragNode.x = w.x
+        this.dragNode.y = w.y
+        this.dragNode.ox = w.x - this.dragNode.tx
+        this.dragNode.oy = w.y - this.dragNode.ty
+      }
     } else if (this.panning) {
       this.moved = true
       this.view.x += dx
@@ -548,10 +544,6 @@ export class MapEngine {
     if (n.children.length && !n.expanded) this.toggle(n, true)
     if (n.type === 'service' || n.type === 'ext' || n.type === 'device') this.hooks.onActivate(n)
   }
-}
-
-function defaultExpanded(n: MapNode): boolean {
-  return !(n.type === 'folder' && n.category)
 }
 
 // '#rrggbb' + alfa -> rgba()
