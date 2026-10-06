@@ -766,6 +766,43 @@ function Diagnostics(): React.JSX.Element {
   )
 }
 
+function Backup(): React.JSX.Element {
+  const showToast = useStore((s) => s.showToast)
+
+  const doExport = (): void => {
+    window.api
+      .exportConfig()
+      .then((r) => r && showToast('ok', t('backupExported', { path: r.path })))
+      .catch((e) => showToast('error', errMsg(e)))
+  }
+  const doImport = (): void => {
+    if (!window.confirm(t('backupImportConfirm'))) return
+    window.api
+      .importConfig()
+      .then((r) => {
+        if (!r) return
+        if (r.ok) showToast('ok', t('backupImported'))
+        else showToast('error', t('backupInvalid'))
+      })
+      .catch((e) => showToast('error', errMsg(e)))
+  }
+
+  return (
+    <>
+      <h2>{t('backupTitle')}</h2>
+      <p className="hint">{t('backupHint')}</p>
+      <div className="row">
+        <button className="btn" onClick={doExport}>
+          {t('backupExport')}
+        </button>
+        <button className="btn" onClick={doImport}>
+          {t('backupImport')}
+        </button>
+      </div>
+    </>
+  )
+}
+
 function Appearance(): React.JSX.Element {
   const theme = useStore((s) => s.ui.theme)
   const themeCookie = useStore((s) => s.themeCookie)
@@ -945,6 +982,9 @@ export function Settings(): React.JSX.Element {
           </Card>
           <Card>
             <Updates />
+          </Card>
+          <Card>
+            <Backup />
           </Card>
         </>
       )}

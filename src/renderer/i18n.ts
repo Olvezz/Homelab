@@ -378,6 +378,15 @@ const es = {
   diagnostics: 'Diagnóstico',
   diagnosticsNone: 'Sin avisos.',
   diagnosticsApprove: 'Aprobar',
+  backupTitle: 'Copia de la configuración',
+  backupHint:
+    'Exporta paneles, ajustes, conexiones SSH, notas y la conexión a Proxmox a un archivo para importarlo en otro equipo. Los secretos (token de Proxmox y contraseñas) no se incluyen: se piden de nuevo al usarlos.',
+  backupExport: 'Exportar configuración',
+  backupImport: 'Importar configuración',
+  backupExported: 'Configuración exportada en {path}',
+  backupImported: 'Configuración importada. Reiniciando…',
+  backupInvalid: 'El archivo no es una exportación válida de HomeLab Desktop',
+  backupImportConfirm: 'Se reemplazarán los paneles y ajustes actuales por los del archivo y la app se reiniciará. ¿Continuar?',
   diagnosticsHint:
     'Convención en las notas de cada VM/LXC: una línea `panel: Nombre | http://ip:puerto` (el icono se asigna solo). También sirve un tag web-<puerto> (o web-<puerto>-https).'
 } as const

@@ -211,3 +211,29 @@ function statSafe(path: string): number {
     return 0
   }
 }
+
+// ---- Exportar / importar la configuración entre equipos ----
+// Los secretos (token de Proxmox, contraseñas SSH y de AdGuard) están cifrados con DPAPI, que solo
+// descifra el mismo usuario de Windows en el mismo equipo: no se exportan y se piden de nuevo al usarlos.
+const EXPORT_FORMAT = 'homelab-desktop-config'
+
+export function buildExport(cfg: Readonly<StoredConfig>): unknown {
+  const { appVersion: _v, ...rest } = cfg
+  const data: Record<string, unknown> = {
+    ...rest,
+    ui: { ...cfg.ui, lastActiveId: undefined },
+    pve: cfg.pve ? { ...cfg.pve, tokenSecretEnc: null } : null,
+    adguard: cfg.adguard ? { ...cfg.adguard, passwordEnc: null } : null,
+    ssh: cfg.ssh.map((c) => ({ ...c, secretEnc: null }))
+  }
+  return { format: EXPORT_FORMAT, version: 1, exportedAt: new Date().toISOString(), data }
+}
+
+// Valida el archivo con el mismo esquema que la carga; devuelve null si no es una exportación válida
+export function parseImport(raw: unknown): StoredConfig | null {
+  if (!raw || typeof raw !== 'object') return null
+  const file = raw as { format?: unknown; data?: unknown }
+  if (file.format !== EXPORT_FORMAT || !file.data || typeof file.data !== 'object') return null
+  const parsed = configSchema.safeParse(file.data)
+  return parsed.success ? parsed.data : null
+}

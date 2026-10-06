@@ -1,4 +1,5 @@
-import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
 import {
   COLLAPSED_SIDEBAR_WIDTH,
@@ -8,7 +9,7 @@ import {
   type ProbeResult,
   type UiConfig
 } from '../shared/types'
-import { notesSchema, panelsSchema, uiPatchSchema, type ConfigStore } from './config/store'
+import { buildExport, notesSchema, panelsSchema, parseImport, uiPatchSchema, type ConfigStore } from './config/store'
 import {
   adguardConfigSchema,
   certDecisionSchema,
@@ -174,6 +175,38 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     return r.canceled ? null : (r.filePaths[0] ?? null)
   })
   handle(IPC.sshTest, (raw) => ssh.test(sshConnectionSchema.parse(raw)))
+  handle(IPC.configExport, async () => {
+    const r = await dialog.showSaveDialog(win, {
+      title: 'Exportar configuración',
+      defaultPath: 'homelab-desktop-config.json',
+      filters: [{ name: 'Configuración de HomeLab Desktop', extensions: ['json'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    writeFileSync(r.filePath, JSON.stringify(buildExport(store.get()), null, 2), 'utf8')
+    return { path: r.filePath }
+  })
+  handle(IPC.configImport, async () => {
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Importar configuración',
+      properties: ['openFile'],
+      filters: [{ name: 'Configuración de HomeLab Desktop', extensions: ['json'] }]
+    })
+    if (r.canceled || !r.filePaths[0]) return null
+    let imported: ReturnType<typeof parseImport> = null
+    try {
+      imported = parseImport(JSON.parse(readFileSync(r.filePaths[0], 'utf8')))
+    } catch {
+      imported = null
+    }
+    if (!imported) return { ok: false, error: 'invalid' }
+    store.update((d) => Object.assign(d, imported, { appVersion: d.appVersion }))
+    // Los servicios guardan la conexión en memoria: se reinicia la app para que arranque con lo importado
+    setTimeout(() => {
+      app.relaunch()
+      app.exit(0)
+    }, 600)
+    return { ok: true }
+  })
   handle(IPC.panelOpenUrl, (raw) => shell.openExternal(httpUrlSchema.parse(raw)))
   handle(IPC.panelClearData, (raw) => views.clearData(idSchema.parse(raw)))
   handle(IPC.sshOpen, (...raw) => {

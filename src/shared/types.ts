@@ -36,6 +36,8 @@ export const IPC = {
   sshDelete: 'ssh:delete',
   sshImportPutty: 'ssh:import-putty',
   sshPickKey: 'ssh:pick-key',
+  configExport: 'config:export',
+  configImport: 'config:import',
   sshOpen: 'ssh:open',
   sshTest: 'ssh:test',
   panelOpenUrl: 'panel:open-url',
@@ -524,6 +526,8 @@ export interface Api {
   deleteSsh(id: string): Promise<SshConnection[]>
   importPutty(): Promise<{ added: number; connections: SshConnection[] }>
   pickSshKey(): Promise<string | null>
+  exportConfig(): Promise<{ path: string } | null>
+  importConfig(): Promise<{ ok: boolean; error?: string } | null>
   testSsh(input: SshConnectionInput): Promise<SshTestResult>
   openPanelUrl(url: string): Promise<void>
   clearPanelData(panelId: string): Promise<void>
