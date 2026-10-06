@@ -1,6 +1,6 @@
 import { net } from 'electron'
+import { iconCandidates, MAX_ICON_BYTES, normalizeDataIcon } from './iconParse'
 
-const MAX_BYTES = 80_000
 const TIMEOUT_MS = 6000
 
 // Tipo real por los primeros bytes: muchos servidores sirven los favicon con un Content-Type erróneo
@@ -44,27 +44,6 @@ async function get(url: string): Promise<{ body: Buffer; finalUrl: string } | nu
   }
 }
 
-// Candidatos declarados en el HTML (<link rel="…icon…" href>), los más grandes/nítidos primero
-function candidates(html: string, base: string): string[] {
-  const out: { url: string; score: number }[] = []
-  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
-    const rel = /\brel\s*=\s*["']?([^"'>]+)/i.exec(tag)?.[1]?.toLowerCase() ?? ''
-    if (!rel.includes('icon')) continue
-    const href = /\bhref\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1]
-    if (!href) continue
-    let url: string
-    try {
-      url = new URL(href, base).href
-    } catch {
-      continue
-    }
-    if (!/^https?:/.test(url)) continue
-    const size = Number(/\bsizes\s*=\s*["']?(\d+)x/i.exec(tag)?.[1] ?? 0)
-    out.push({ url, score: (rel.includes('apple-touch') ? 1000 : 0) + (/\.svg(\?|$)/i.test(url) ? 500 : 0) + Math.min(size, 256) })
-  }
-  return out.sort((a, b) => b.score - a.score).map((c) => c.url)
-}
-
 // Busca el icono del sitio oficial y lo devuelve como data URI (nada de terceros: solo el propio sitio)
 export async function fetchSiteIcon(siteUrl: string): Promise<string | null> {
   let origin: string
@@ -78,12 +57,17 @@ export async function fetchSiteIcon(siteUrl: string): Promise<string | null> {
 
   const list: string[] = []
   const page = await get(siteUrl)
-  if (page) list.push(...candidates(page.body.toString('utf8'), page.finalUrl))
+  if (page) list.push(...iconCandidates(page.body.toString('utf8'), page.finalUrl))
   list.push(`${new URL(page?.finalUrl ?? origin).origin}/favicon.ico`, `${origin}/favicon.ico`)
 
   for (const url of [...new Set(list)].slice(0, 6)) {
+    if (url.startsWith('data:')) {
+      const inline = normalizeDataIcon(url)
+      if (inline) return inline
+      continue
+    }
     const img = await get(url)
-    if (!img || img.body.length > MAX_BYTES) continue
+    if (!img || img.body.length > MAX_ICON_BYTES) continue
     const mime = sniff(img.body)
     if (mime) return `data:${mime};base64,${img.body.toString('base64')}`
   }
