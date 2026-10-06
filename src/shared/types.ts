@@ -491,7 +491,7 @@ export interface Api {
   getConfig(): Promise<AppConfigView>
   savePanels(panels: Panel[]): Promise<void>
   setUi(patch: Partial<UiConfig>): Promise<UiConfig>
-  showView(panelId: string | null, reload?: boolean): Promise<void>
+  showView(panelId: string | null): Promise<void>
   setOverlay(on: boolean): Promise<void>
   nav(action: NavAction): Promise<void>
   decideCert(hostname: string, fingerprint: string, accept: boolean): Promise<void>

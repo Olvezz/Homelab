@@ -213,8 +213,8 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     onNativeTheme(nativeThemeSchema.parse(raw))
   })
 
-  handle(IPC.showView, (raw, reload) => {
-    views.show(z.union([idSchema, z.null()]).parse(raw), z.boolean().optional().parse(reload) ?? false)
+  handle(IPC.showView, (raw) => {
+    views.show(z.union([idSchema, z.null()]).parse(raw))
   })
 
   handle(IPC.setOverlay, (raw) => {

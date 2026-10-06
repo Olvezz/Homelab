@@ -232,7 +232,7 @@ export const useStore = create<State>((set, get) => ({
     userPicked = true
     set({ activeId: id, page: 'view', viewState: null, menu: null, searchOpen: false })
     if (!get().panels.find((p) => p.id === id)?.kind) void window.api.setUi({ lastActiveId: id })
-    void window.api.showView(id, true) // entrar a un panel lo refresca (F5)
+    void window.api.showView(id)
   },
 
   openNotes: () => {

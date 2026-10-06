@@ -6,7 +6,8 @@ import type { CertTrust } from './security/certTrust'
 const MAX_LIVE_VIEWS = 8
 const PVE_COOKIE = 'PVEAuthCookie'
 const THEME_COOKIE = 'PVEThemeCookie'
-const ALLOWED_PERMISSION = 'clipboard-sanitized-write'
+// Escribir y leer el portapapeles: la consola de Proxmox (xterm.js) pega con navigator.clipboard.readText()
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write', 'clipboard-read'])
 const PVE_COOKIE_TTL_SEC = 2 * 60 * 60
 
 interface Entry {
@@ -163,14 +164,11 @@ export class ViewManager {
     this.show(panelId)
   }
 
-  // `reload`: al entrar a un panel que ya estaba cargado se refresca la página (F5). Una vista recién creada ya carga sola.
-  show(panelId: string | null, reload = false): void {
-    const wasActive = this.activeId === panelId
+  show(panelId: string | null): void {
     this.activeId = panelId && this.panels.has(panelId) ? panelId : null
     if (this.activeId) {
       const existing = this.entries.get(this.activeId)
       const entry = existing ?? this.create(this.panels.get(this.activeId)!)
-      if (existing && reload && !wasActive && !existing.view.webContents.isDestroyed()) existing.view.webContents.reload()
       entry.lastUsed = Date.now()
       this.scheduleStatus()
     }
@@ -316,9 +314,9 @@ export class ViewManager {
   // Permisos denegados, certificados por huella y cookie de Proxmox persistente
   private configureSession(ses: Session): void {
     this.trust.attach(ses)
-    // Solo se permite escribir en el portapapeles (copiar contraseñas en un gestor, URLs…); el resto, denegado
-    ses.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === ALLOWED_PERMISSION))
-    ses.setPermissionCheckHandler((_wc, permission) => permission === ALLOWED_PERMISSION)
+    // Solo se permite el portapapeles (copiar/pegar en la consola, contraseñas en un gestor…); el resto, denegado
+    ses.setPermissionRequestHandler((_wc, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission)))
+    ses.setPermissionCheckHandler((_wc, permission) => ALLOWED_PERMISSIONS.has(permission))
 
     // PVEAuthCookie llega como cookie de sesión: se re-guarda con caducidad (~2 h) para
     // seguir logueado tras reiniciar la app. Nunca se guarda la contraseña.

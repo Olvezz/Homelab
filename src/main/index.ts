@@ -90,6 +90,12 @@ function createWindow(store: ConfigStore): void {
         window.setFullScreen(!window.isFullScreen())
         return
       }
+      // Sin menú de aplicación el pegado nativo no llega a la consola de Proxmox (xterm.js): se fuerza aquí
+      if (input.control && !input.alt && !input.meta && key === 'v') {
+        event.preventDefault()
+        wc.paste()
+        return
+      }
       if (terminalActive || !input.control || input.alt || input.meta) return
       if (key === 'r') {
         event.preventDefault()
