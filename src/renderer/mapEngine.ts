@@ -21,6 +21,8 @@ export interface SimNode extends MapNode {
   ox: number // desplazamiento manual (al arrastrar el nodo)
   oy: number
   ang: number // ángulo en la vista de araña
+  vx: number // velocidad del resorte (solo en la vista de araña)
+  vy: number
   box?: Box // recuadro de la carpeta en la vista de bloques
   children: SimNode[]
   expanded: boolean
@@ -49,6 +51,9 @@ const V_ROW = 120 // vertical: separación entre niveles
 const RING = 115 // araña: separación entre anillos
 const CELL_W = 210 // bloques: tamaño de una celda
 const CELL_H = 56
+const SPRING_K = 0.09 // araña: rigidez del resorte
+const SPRING_DAMP = 0.72 // araña: amortiguación (rebote de ~10 %, leve; se asienta en ~0,45 s)
+const SPRING_FOLLOW = 0.5 // araña: cuánto arrastra un nodo a sus ramas
 const PAD = 14
 const GAP = 12
 
@@ -144,6 +149,8 @@ export class MapEngine {
         ox: prev?.ox ?? 0,
         oy: prev?.oy ?? 0,
         ang: 0,
+        vx: 0,
+        vy: 0,
         expanded: prev ? prev.expanded : !(m.type === 'folder' && m.category)
       }
       map.set(n.id, n)
@@ -218,7 +225,10 @@ export class MapEngine {
   setMode(mode: ViewMode): void {
     if (mode === this.mode) return
     this.mode = mode
-    for (const n of this.nodes) n.ox = n.oy = 0
+    for (const n of this.nodes) {
+      n.ox = n.oy = 0
+      n.vx = n.vy = 0
+    }
     this.dirty = true
     this.hooks.onChange()
     setTimeout(() => this.fit(), 350)
@@ -454,17 +464,48 @@ export class MapEngine {
     }
   }
 
-  // Un paso de la animación: cada nodo se acerca a su sitio sin pasarse (no hay rebote)
+  // Lo que arrastra a un nodo el desplazamiento de sus ancestros (solo en la araña): las ramas siguen al nodo que se mueve
+  private pull(n: SimNode): { x: number; y: number } {
+    let x = 0
+    let y = 0
+    let w = SPRING_FOLLOW
+    for (let p = n.parent ? this.byId.get(n.parent) : undefined; p; p = p.parent ? this.byId.get(p.parent) : undefined) {
+      x += p.ox * w
+      y += p.oy * w
+      w *= SPRING_FOLLOW
+    }
+    return { x, y }
+  }
+
+  // Un paso de la animación. Árbol y vertical: cada nodo se acerca a su sitio sin pasarse. Araña: resorte leve
+  // (un pequeño rebote al acomodarse). Bloques: sin animación, para que los recuadros y los nodos no se separen.
   private tick(): void {
     if (this.dirty) this.layout()
-    const instant = this.mode === 'blocks' // los recuadros no se animan: los nodos tampoco, para que no se separen
+    const instant = this.mode === 'blocks'
+    const spring = this.mode === 'web'
     for (const n of this.visible()) {
       if (n === this.dragNode) continue
-      const gx = n.tx + n.ox
-      const gy = n.ty + n.oy
+      const pl = spring ? this.pull(n) : { x: 0, y: 0 }
+      const gx = n.tx + n.ox + pl.x
+      const gy = n.ty + n.oy + pl.y
       if (instant) {
         n.x = gx
         n.y = gy
+        continue
+      }
+      if (spring) {
+        n.vx = (n.vx + (gx - n.x) * SPRING_K) * SPRING_DAMP
+        n.vy = (n.vy + (gy - n.y) * SPRING_K) * SPRING_DAMP
+        n.x += n.vx
+        n.y += n.vy
+        if (Math.abs(gx - n.x) < 0.1 && Math.abs(n.vx) < 0.05) {
+          n.x = gx
+          n.vx = 0
+        }
+        if (Math.abs(gy - n.y) < 0.1 && Math.abs(n.vy) < 0.05) {
+          n.y = gy
+          n.vy = 0
+        }
         continue
       }
       n.x += (gx - n.x) * 0.2
