@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeImage, nativeTheme, screen, session, shell, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, Menu, nativeImage, nativeTheme, screen, session, shell, Tray } from 'electron'
 import type { Event as ElectronEvent, Input, WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -80,6 +80,27 @@ function createWindow(store: ConfigStore): void {
   const toast = (t: { kind: 'info' | 'ok' | 'error'; text: string }): void =>
     send(IPC.toast, { id: randomUUID(), ...t })
 
+  // Texto seleccionado en la vista: el de la consola de Proxmox (xterm.js, a veces dentro de un iframe)
+  // no es una selección del DOM, así que se pregunta al propio terminal (`term`) y, si no, al DOM.
+  const selectedText = async (wc: WebContents): Promise<string> => {
+    const probe = `(() => { try { if (typeof term !== 'undefined' && term.hasSelection && term.hasSelection()) return term.getSelection() } catch {} return String(window.getSelection() || '') })()`
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        const text: unknown = await frame.executeJavaScript(probe)
+        if (typeof text === 'string' && text) return text
+      } catch {
+        // frame sin acceso o ya destruido
+      }
+    }
+    return ''
+  }
+  const copySelection = async (wc: WebContents): Promise<void> => {
+    if (wc.isDestroyed()) return
+    const text = await selectedText(wc)
+    if (text) clipboard.writeText(text)
+    else wc.copy()
+  }
+
   // Atajos: las vistas web se quedan con el teclado, así que se interceptan en el main
   const hookInput = (wc: WebContents): void => {
     wc.on('before-input-event', (event: ElectronEvent, input: Input) => {
@@ -88,6 +109,12 @@ function createWindow(store: ConfigStore): void {
       if (key === 'f11') {
         event.preventDefault()
         window.setFullScreen(!window.isFullScreen())
+        return
+      }
+      // Ctrl+C en una consola es SIGINT: para copiar se usa Ctrl+Shift+C o Ctrl+Insert
+      if ((input.control && input.shift && key === 'c') || (input.control && !input.shift && key === 'insert')) {
+        event.preventDefault()
+        void copySelection(wc)
         return
       }
       // Sin menú de aplicación el pegado nativo no llega a la consola de Proxmox (xterm.js): se fuerza aquí
@@ -112,6 +139,18 @@ function createWindow(store: ConfigStore): void {
         send(IPC.shortcut, `panel:${key}` as Shortcut)
       }
     })
+    // Clic derecho en las vistas web: Copiar / Pegar (la consola de Proxmox no tiene menú propio)
+    if (wc !== window.webContents) {
+      wc.on('context-menu', (_e, params) => {
+        void selectedText(wc).then((text) => {
+          if (wc.isDestroyed()) return
+          Menu.buildFromTemplate([
+            { label: 'Copiar', enabled: !!text || params.selectionText.length > 0, click: () => void copySelection(wc) },
+            { label: 'Pegar', click: () => wc.paste() }
+          ]).popup({ window })
+        })
+      })
+    }
   }
   hookInput(window.webContents)
 
