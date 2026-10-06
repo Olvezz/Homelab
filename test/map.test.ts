@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMap, linkTargets, type MapInput, type MapNode } from '../src/shared/map'
+import { buildMap, linkTargets, tagColor, type MapInput, type MapNode } from '../src/shared/map'
 
 const guest = (vmid: number, name: string, type: 'qemu' | 'lxc', ips: string[], status = 'running', template = false) => ({
   key: `proxmox/${vmid}`,
@@ -200,5 +200,20 @@ describe('agrupación por tags y carpetas', () => {
     const linked = { ...input, groupByFolders: true }
     linked.panels.find((p) => p.id === 'jf')!.mapLink = 'g:proxmox/104'
     expect(by(buildMap(linked), 'p:jf').parent).toBe('g:proxmox/104')
+  })
+})
+
+describe('colores de carpetas y tags', () => {
+  it('la carpeta del usuario lleva su color y el grupo de tag un color estable de la paleta', () => {
+    const input = { ...base(), folders: [{ id: 'mm', name: 'Multimedia', color: '#e5484d' }], groupByFolders: true, groupByTags: true }
+    input.panels.find((p) => p.id === 'jf')!.folder = 'mm'
+    input.guests[0].tags = ['red']
+    input.guests[1].tags = ['red']
+    const n = buildMap(input)
+    expect(by(n, 'f:mm').color).toBe('#e5484d')
+    const tag = by(n, 'tag:proxmox:red').color
+    expect(tag).toMatch(/^#[0-9a-f]{6}$/)
+    expect(buildMap(input).find((x) => x.id === 'tag:proxmox:red')!.color).toBe(tag)
+    expect(tagColor('Red')).toBe(tagColor('red')) // no distingue mayúsculas
   })
 })

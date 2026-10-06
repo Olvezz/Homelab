@@ -120,6 +120,12 @@ export class MapEngine {
 
   // ---- datos ----
 
+  // Color de un nodo: el propio (carpeta del usuario, tag) o el de su tipo
+  private col(n: SimNode): string {
+    return n.color ?? NODE_COLORS[n.type]
+  }
+
+
   // Carga un árbol nuevo conservando posición, desplazamientos y carpetas abiertas de los nodos que ya estaban
   setNodes(list: MapNode[]): void {
     const old = this.byId
@@ -552,10 +558,10 @@ export class MapEngine {
         const b = n.box!
         ctx.globalAlpha = dim(n) ? 0.25 : 1
         roundRect(ctx, b.x, b.y, b.w, b.h, 14)
-        ctx.fillStyle = hexA(NODE_COLORS[n.type], 0.055)
+        ctx.fillStyle = hexA(this.col(n), n.color ? 0.1 : 0.055)
         ctx.fill()
         ctx.setLineDash([5, 5])
-        ctx.strokeStyle = hexA(NODE_COLORS[n.type], n === focus ? 0.7 : 0.3)
+        ctx.strokeStyle = hexA(this.col(n), n === focus ? 0.8 : n.color ? 0.55 : 0.3)
         ctx.lineWidth = n === focus ? 2 : 1.3
         ctx.stroke()
         ctx.setLineDash([])
@@ -568,8 +574,8 @@ export class MapEngine {
         const on = !!focus && hl.has(n) && hl.has(p)
         ctx.globalAlpha = dim(n) ? 0.07 : on ? 1 : 0.75
         const g = ctx.createLinearGradient(p.x, p.y, n.x, n.y)
-        g.addColorStop(0, hexA(NODE_COLORS[p.type], on ? 0.95 : 0.5))
-        g.addColorStop(1, hexA(NODE_COLORS[n.type], on ? 0.95 : 0.5))
+        g.addColorStop(0, hexA(this.col(p), on ? 0.95 : 0.5))
+        g.addColorStop(1, hexA(this.col(n), on ? 0.95 : 0.5))
         ctx.strokeStyle = g
         ctx.lineWidth = (on ? 2.6 : 1.5) / Math.max(view.k, 0.6)
         ctx.beginPath()
@@ -588,7 +594,7 @@ export class MapEngine {
     // nodos: orbe translúcido con borde y núcleo brillante
     for (const n of vs) {
       const r = RADIUS[n.type]
-      const col = n.status === 'stopped' ? '#6b7280' : NODE_COLORS[n.type]
+      const col = n.status === 'stopped' ? '#6b7280' : this.col(n)
       const hot = n === this.hover || n === this.selected
       ctx.globalAlpha = dim(n) ? 0.18 : 1
       if (hot) {

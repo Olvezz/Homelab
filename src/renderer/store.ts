@@ -145,7 +145,7 @@ export function mapInputOf(s: Pick<State, 'pve' | 'snapshot' | 'panels' | 'layou
     nodes: s.snapshot.nodes.map((n) => ({ name: n.name, online: n.online })),
     guests: s.snapshot.guests.map((g) => ({ key: g.key, vmid: g.vmid, name: g.name, node: g.node, type: g.type, status: g.status, ips: g.ips, template: g.template, tags: g.tags })),
     panels: listedPanels(s.panels).map((p) => ({ id: p.id, name: p.name, url: p.url, vmid: p.vmid, mapKind: p.mapKind, mapLink: p.mapLink, folder: s.layout.folderOf[p.id] })),
-    folders: s.layout.folders.filter((f) => f.section === 'panels').map((f) => ({ id: f.id, name: f.name })),
+    folders: s.layout.folders.filter((f) => f.section === 'panels').map((f) => ({ id: f.id, name: f.name, color: f.color })),
     showTemplates: s.ui.showTemplates,
     groupByTags: group.tags,
     groupByFolders: group.folders

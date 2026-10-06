@@ -2,6 +2,8 @@
 // (nodos y VMs/LXC de Proxmox + paneles). La IP decide dónde cuelga cada servicio y el puerto lo identifica.
 // Lógica pura (sin Electron ni React) para poder probarla.
 
+import { FOLDER_COLORS } from './layout'
+
 export type MapKind = 'service' | 'router' | 'switch' | 'ap' | 'nas' | 'other'
 export const MAP_KINDS: MapKind[] = ['service', 'router', 'switch', 'ap', 'nas', 'other']
 
@@ -23,6 +25,7 @@ export interface MapNode {
   deviceKind?: MapKind
   category?: boolean // carpeta creada sola para agrupar servicios (empieza cerrada)
   tagGroup?: boolean // carpeta creada sola por un tag de Proxmox
+  color?: string // color propio (carpeta del usuario o tag); si falta vale el del tipo
 }
 
 export interface MapInput {
@@ -32,7 +35,7 @@ export interface MapInput {
   panels: { id: string; name: string; url: string; vmid?: number; mapKind?: MapKind; mapLink?: string; folder?: string }[]
   groupByTags?: boolean // agrupa las máquinas de un nodo por su tag de Proxmox
   groupByFolders?: boolean // los paneles que están en una carpeta del usuario cuelgan de ella
-  folders: { id: string; name: string }[] // carpetas del usuario: destinos de enlace
+  folders: { id: string; name: string; color?: string }[] // carpetas del usuario (con su color): destinos de enlace
   showTemplates?: boolean
 }
 
@@ -87,6 +90,13 @@ function netOf(h: string): { key: string; label: string } {
     return { key: `${a}.${b}.${c}`, label: `LAN ${a}.${b}.${c}.0/24` }
   }
   return { key: '', label: 'LAN' }
+}
+
+// Color estable para un tag: el mismo nombre da siempre el mismo color de la paleta de carpetas
+export function tagColor(tag: string): string {
+  let h = 0
+  for (const ch of tag.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return FOLDER_COLORS[h % FOLDER_COLORS.length]
 }
 
 // Tag de Proxmox que sirve para agrupar: los de descubrimiento de paneles (web-8080) no son agrupaciones
@@ -170,7 +180,7 @@ export function buildMap(input: MapInput): MapNode[] {
     const count = tag ? (tagCount.get(`${g.node}:${tag}`) ?? 0) : 0
     if (tag && count >= 2) {
       const id = `tag:${g.node}:${tag}`
-      if (!have.has(id)) add({ id, type: 'folder', label: tag, sub: `${count} máquinas`, status: 'unknown', parent, tagGroup: true })
+      if (!have.has(id)) add({ id, type: 'folder', label: tag, sub: `${count} máquinas`, status: 'unknown', parent, tagGroup: true, color: tagColor(tag) })
       parent = id
     }
     const n = add({
@@ -190,6 +200,7 @@ export function buildMap(input: MapInput): MapNode[] {
   // Carpetas del usuario que reciben enlaces (se crean solo si alguien cuelga de ellas)
   const folderIds = new Set(input.folders.map((f) => `f:${f.id}`))
   const folderName = new Map(input.folders.map((f) => [`f:${f.id}`, f.name]))
+  const folderColor = new Map(input.folders.map((f) => [`f:${f.id}`, f.color]))
   const panelIds = new Set(input.panels.map((p) => `p:${p.id}`))
 
   // El panel que es el propio nodo de Proxmox se fusiona con él (no se duplica)
@@ -226,7 +237,7 @@ export function buildMap(input: MapInput): MapNode[] {
     if (have.has(link)) return link
     if (panelIds.has(link)) return link
     if (folderIds.has(link)) {
-      if (!have.has(link)) add({ id: link, type: 'folder', label: folderName.get(link) ?? '', status: 'unknown', parent: 'root' })
+      if (!have.has(link)) add({ id: link, type: 'folder', label: folderName.get(link) ?? '', status: 'unknown', parent: 'root', color: folderColor.get(link) })
       return link
     }
     return null
