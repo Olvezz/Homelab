@@ -18,12 +18,13 @@ import {
   type UpdateStatus,
   type ViewState
 } from '../shared/types'
+import { defaultLayout, organize, type LayoutSection, type SidebarLayout } from '../shared/layout'
 import { errMsg, t } from './i18n'
 import { pushData } from './sshBus'
 
-export type ItemKind = 'panel' | 'ssh' | 'session'
+export type ItemKind = 'panel' | 'ssh' | 'session' | 'folder'
 
-export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'home' | 'notes'
+export type Page = 'view' | 'settings' | 'wizard' | 'ssh' | 'notes'
 
 export interface ConfirmState {
   title: string
@@ -60,10 +61,11 @@ interface State {
   sshSecretPrompt: { connId: string; name: string } | null
   sshDraft: Partial<SshConnectionInput> | null // conexión nueva con datos de un guest
   settingsAnchor: string | null // sección de Ajustes a la que desplazarse al abrir
+  layout: SidebarLayout // orden, carpetas y fijados de la barra lateral
+  folderDialog: { id?: string; section: LayoutSection; assign?: string } | null // crear/editar carpeta (assign: elemento a meter en ella)
 
   init: () => Promise<void>
   selectPanel: (id: string) => void
-  openHome: () => void
   openNotes: () => void
   openSettings: (anchor?: string) => void
   closeSettings: () => void
@@ -71,6 +73,9 @@ interface State {
   closeWizard: () => void
   saveManualPanels: (panels: Panel[]) => Promise<void>
   setUi: (patch: Partial<UiConfig>) => void
+  setLayout: (next: SidebarLayout) => void
+  openFolderDialog: (d: { id?: string; section: LayoutSection; assign?: string }) => void
+  closeFolderDialog: () => void
   setSidebarWidthLive: (width: number) => void
   decideCert: (accept: boolean) => void
   showToast: (kind: ToastMessage['kind'], text: string) => void
@@ -115,7 +120,6 @@ const defaultUi: UiConfig = {
   closeToTray: true,
   startWithWindows: false,
   showTemplates: false,
-  startOnHome: true,
   autoUpdate: true
 }
 
@@ -131,6 +135,12 @@ export function resolvePanel(panels: Panel[], p: Panel): Panel {
 }
 
 export const listedPanels = (panels: Panel[]): Panel[] => panels.filter((p) => p.kind !== 'tab')
+
+// Paneles en el orden en que se ven en la barra lateral (fijados, carpetas, sueltos): lo que recorren Ctrl+1..9
+export function visiblePanels(panels: Panel[], layout: SidebarLayout): Panel[] {
+  const o = organize(listedPanels(panels), layout, 'panels')
+  return [...o.pinned, ...o.groups.flatMap((g) => g.items), ...o.loose]
+}
 
 const earlySshState = new Map<string, { id: string; state: SshSession['state']; message?: string }>()
 
@@ -165,14 +175,16 @@ export const useStore = create<State>((set, get) => ({
   sshSecretPrompt: null,
   sshDraft: null,
   settingsAnchor: null,
+  layout: defaultLayout(),
+  folderDialog: null,
 
   init: async () => {
-    const { panels, ui, pve, snapshot, themeCookie } = await window.api.getConfig()
+    const { panels, ui, pve, snapshot, themeCookie, layout } = await window.api.getConfig()
     wantedId = ui.lastActiveId
     const activeId = panels.find((p) => p.id === ui.lastActiveId)?.id ?? listedPanels(panels)[0]?.id ?? null
     // Sin conexión configurada se abre el asistente (se puede omitir)
-    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : ui.startOnHome ? 'home' : 'view'
-    set({ ready: true, panels, ui, pve, snapshot, themeCookie, activeId, page })
+    const page: Page = snapshot.status === 'unconfigured' && !pve ? 'wizard' : 'view'
+    set({ ready: true, panels, ui, pve, snapshot, themeCookie, activeId, page, layout })
 
     if (!listening) {
       listening = true
@@ -239,10 +251,6 @@ export const useStore = create<State>((set, get) => ({
     set({ page: 'notes', menu: null, itemMenu: null, searchOpen: false })
     void window.api.showView(null)
   },
-  openHome: () => {
-    set({ page: 'home', menu: null, itemMenu: null, searchOpen: false })
-    void window.api.showView(null)
-  },
   openSettings: (anchor) => {
     // onClick={openSettings} pasa el evento como primer argumento: solo vale un texto
     set({ page: 'settings', settingsAnchor: typeof anchor === 'string' ? anchor : null })
@@ -264,6 +272,13 @@ export const useStore = create<State>((set, get) => ({
   saveManualPanels: async (panels) => {
     await window.api.savePanels(panels)
   },
+
+  setLayout: (layout) => {
+    set({ layout })
+    void window.api.saveLayout(layout)
+  },
+  openFolderDialog: (folderDialog) => set({ folderDialog, itemMenu: null }),
+  closeFolderDialog: () => set({ folderDialog: null }),
 
   setUi: (patch) => {
     set((s) => ({ ui: { ...s.ui, ...patch } }))
@@ -413,7 +428,7 @@ function handleShortcut(sc: Shortcut): void {
   else if (sc === 'toggleSidebar') s.setUi({ sidebarCollapsed: !s.ui.sidebarCollapsed })
   else {
     const n = Number(sc.slice('panel:'.length))
-    const panel = listedPanels(s.panels)[n - 1]
+    const panel = visiblePanels(s.panels, s.layout)[n - 1]
     if (panel) s.selectPanel(panel.id)
   }
 }

@@ -1,5 +1,7 @@
-import { useRef } from 'react'
-import type { Guest, Panel, PanelStatus, PveStatus } from '../../shared/types'
+import { useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import type { Guest, Panel, PanelStatus, PveStatus, SshConnection } from '../../shared/types'
+import { flatOrder, moveItem, movePin, organize, togglePin, type LayoutSection, type Named, type SidebarFolder, type SortMode } from '../../shared/layout'
 import { t, type Key } from '../i18n'
 import { effectiveSidebarWidth, listedPanels, resolvePanel, useStore } from '../store'
 import { fmtAgo } from '../homeFormat'
@@ -158,15 +160,261 @@ function PanelState({ status, corner }: { status: PanelStatus | undefined; corne
   )
 }
 
+// ---- Orden, carpetas y fijados ----
+
+// Destino de un soltado sobre una fila: 'pins' reordena los fijados; 'list' coloca dentro de una sección/carpeta
+interface RowDnd {
+  zone: 'pins' | 'list'
+  section: LayoutSection
+  id: string
+  folderId: string | null
+  nextId: string | null // el siguiente de la lista (para soltar en la mitad inferior)
+}
+
+// Lo que se está arrastrando (dataTransfer no permite leerse durante dragover)
+let dragged: { id: string; section: LayoutSection } | null = null
+
+function dropItem(target: { zone: 'pins' | 'list'; section: LayoutSection; folderId: string | null }, before: string | null): void {
+  const d = dragged
+  dragged = null
+  if (!d) return
+  const s = useStore.getState()
+  if (target.zone === 'pins') {
+    const base = s.layout.pins.includes(d.id) ? s.layout : togglePin(s.layout, d.id)
+    s.setLayout(movePin(base, d.id, before))
+    return
+  }
+  if (d.section !== target.section) return
+  const items: Named[] = target.section === 'panels' ? listedPanels(s.panels) : s.sshConnections
+  s.setLayout(moveItem(s.layout, items, target.section, d.id, target.folderId, before))
+}
+
+// Arrastrar y soltar en una fila: devuelve las props del contenedor y la clase del indicador de posición
+function useRowDnd(dnd: RowDnd | undefined): { props: React.HTMLAttributes<HTMLDivElement>; cls: string } {
+  const [edge, setEdge] = useState<'top' | 'bottom' | null>(null)
+  if (!dnd) return { props: {}, cls: '' }
+  const edgeOf = (e: React.DragEvent<HTMLDivElement>): 'top' | 'bottom' => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return e.clientY < r.top + r.height / 2 ? 'top' : 'bottom'
+  }
+  const accepts = (): boolean => !!dragged && dragged.id !== dnd.id && (dnd.zone === 'pins' || dragged.section === dnd.section)
+  return {
+    cls: edge ? ` drop-${edge}` : '',
+    props: {
+      draggable: true,
+      onDragStart: (e) => {
+        dragged = { id: dnd.id, section: dnd.section }
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', dnd.id)
+      },
+      onDragEnd: () => {
+        dragged = null
+        setEdge(null)
+      },
+      onDragOver: (e) => {
+        if (!accepts()) return
+        e.preventDefault()
+        e.stopPropagation()
+        setEdge(edgeOf(e))
+      },
+      onDragLeave: () => setEdge(null),
+      onDrop: (e) => {
+        if (!accepts()) return
+        e.preventDefault()
+        e.stopPropagation()
+        const before = edgeOf(e) === 'top' ? dnd.id : dnd.nextId
+        setEdge(null)
+        dropItem(dnd, before)
+      }
+    }
+  }
+}
+
+const SORT_KEY: Record<SortMode, Key> = { az: 'sortAz', za: 'sortZa', custom: 'sortCustom' }
+const SORT_ICON: Record<SortMode, string> = { az: 'ui:sort-az', za: 'ui:sort-za', custom: 'ui:sort-custom' }
+
+// Botones de la cabecera de una sección: orden (A-Z → Z-A → a mano) y nueva carpeta
+function SectionTools({ section, items }: { section: LayoutSection; items: Named[] }): React.JSX.Element {
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const openFolderDialog = useStore((s) => s.openFolderDialog)
+  const mode = layout.sort[section]
+  const next: SortMode = mode === 'az' ? 'za' : mode === 'za' ? 'custom' : 'az'
+  const cycle = (): void => {
+    // Al pasar a «a mano» se parte de lo que se está viendo
+    const order =
+      next === 'custom'
+        ? [...layout.order.filter((id) => !items.some((x) => x.id === id)), ...flatOrder(items, layout, section)]
+        : layout.order
+    setLayout({ ...layout, order, sort: { ...layout.sort, [section]: next } })
+  }
+  const title = `${t('sortBy')}: ${t(SORT_KEY[mode])} (${t('sortNext', { mode: t(SORT_KEY[next]) })})`
+  return (
+    <>
+      <button className="mini" title={title} aria-label={title} onClick={cycle}>
+        <Icon k={SORT_ICON[mode]} size={13} />
+      </button>
+      <button className="mini" title={t('folderNew')} aria-label={t('folderNew')} onClick={() => openFolderDialog({ section })}>
+        <Icon k="ui:folder-plus" size={13} />
+      </button>
+    </>
+  )
+}
+
+function FolderHeader({ folder, count, section }: { folder: SidebarFolder; count: number; section: LayoutSection }): React.JSX.Element {
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const openItemMenu = useStore((s) => s.openItemMenu)
+  const [over, setOver] = useState(false)
+  const accepts = (): boolean => !!dragged && dragged.section === section
+  return (
+    <div
+      className={`folder-head${over ? ' drop-into' : ''}`}
+      style={{ '--folder-color': folder.color } as CSSProperties}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        openItemMenu('folder', folder.id, e.clientX, e.clientY)
+      }}
+      onDragOver={(e) => {
+        if (!accepts()) return
+        e.preventDefault()
+        e.stopPropagation()
+        setOver(true)
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        if (!accepts()) return
+        e.preventDefault()
+        e.stopPropagation()
+        setOver(false)
+        dropItem({ zone: 'list', section, folderId: folder.id }, null)
+      }}
+    >
+      <button
+        className="folder-toggle"
+        aria-expanded={!folder.collapsed}
+        onClick={() => setLayout({ ...layout, folders: layout.folders.map((f) => (f.id === folder.id ? { ...f, collapsed: !f.collapsed } : f)) })}
+      >
+        <Icon k={folder.collapsed ? 'ui:chevron-right' : 'ui:chevron-down'} size={14} />
+        <Icon k="ui:folder" size={15} className="folder-ico" />
+        <span className="folder-name">{folder.name}</span>
+        <span className="folder-count">{count}</span>
+      </button>
+    </div>
+  )
+}
+
+interface ItemExtra {
+  dnd?: RowDnd
+  folderColor?: string
+}
+
+// Una sección con su orden: carpetas (con su color) y, debajo, los elementos sueltos
+function OrganizedList<T extends Named>({
+  section,
+  items,
+  collapsed,
+  render
+}: {
+  section: LayoutSection
+  items: T[]
+  collapsed: boolean
+  render: (item: T, extra: ItemExtra) => React.ReactNode
+}): React.JSX.Element {
+  const layout = useStore((s) => s.layout)
+  const o = organize(items, layout, section)
+  const renderList = (list: T[], folderId: string | null, color?: string): React.ReactNode =>
+    list.map((item, i) =>
+      render(item, {
+        folderColor: color,
+        dnd: collapsed ? undefined : { zone: 'list', section, id: item.id, folderId, nextId: list[i + 1]?.id ?? null }
+      })
+    )
+  return (
+    <div
+      className="panel-list"
+      onDragOver={(e) => {
+        if (dragged?.section === section) e.preventDefault()
+      }}
+      onDrop={(e) => {
+        if (dragged?.section !== section) return
+        e.preventDefault()
+        dropItem({ zone: 'list', section, folderId: null }, null)
+      }}
+    >
+      {o.groups.map((g) => (
+        <div key={g.folder.id} className="folder">
+          {!collapsed && <FolderHeader folder={g.folder} count={g.items.length} section={section} />}
+          {(collapsed || !g.folder.collapsed) && renderList(g.items, g.folder.id, g.folder.color)}
+        </div>
+      ))}
+      {renderList(o.loose, null)}
+    </div>
+  )
+}
+
+// Fijados: arriba de todo, por encima del nodo de Proxmox
+function PinnedList({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
+  const layout = useStore((s) => s.layout)
+  const panels = useStore((s) => s.panels)
+  const connections = useStore((s) => s.sshConnections)
+  type Pinned = { id: string; panel?: Panel; conn?: SshConnection }
+  const entries = layout.pins
+    .map((id): Pinned | null => {
+      const panel = listedPanels(panels).find((p) => p.id === id)
+      if (panel) return { id, panel }
+      const conn = connections.find((c) => c.id === id)
+      return conn ? { id, conn } : null
+    })
+    .filter((x): x is Pinned => !!x)
+  if (entries.length === 0) return null
+  return (
+    <>
+      {!collapsed && (
+        <div className="sidebar-section pinned-title">
+          <Icon k="ui:pin" size={12} /> {t('pinned')}
+        </div>
+      )}
+      <div
+        className="panel-list"
+        onDragOver={(e) => {
+          if (dragged) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (!dragged) return
+          e.preventDefault()
+          dropItem({ zone: 'pins', section: dragged.section, folderId: null }, null)
+        }}
+      >
+        {entries.map((x, i) => {
+          const dnd: RowDnd | undefined = collapsed
+            ? undefined
+            : { zone: 'pins', section: x.panel ? 'panels' : 'ssh', id: x.id, folderId: null, nextId: entries[i + 1]?.id ?? null }
+          return x.panel ? (
+            <PanelButton key={x.id} panel={x.panel} collapsed={collapsed} dnd={dnd} />
+          ) : (
+            <SshRow key={x.id} conn={x.conn!} collapsed={collapsed} dnd={dnd} />
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 function PanelButton({
   panel,
   nested,
-  collapsed
+  collapsed,
+  dnd,
+  folderColor
 }: {
   panel: Panel
   nested?: boolean
   collapsed?: boolean
+  dnd?: RowDnd
+  folderColor?: string
 }): React.JSX.Element {
+  const { props: dndProps, cls: dndCls } = useRowDnd(dnd)
   const activeId = useStore((s) => s.activeId)
   const page = useStore((s) => s.page)
   const selectPanel = useStore((s) => s.selectPanel)
@@ -177,7 +425,9 @@ function PanelButton({
   const active = page === 'view' && panel.id === activeId
   return (
     <div
-      className={`panel-row${active ? ' active' : ''}${nested ? ' nested' : ''}`}
+      className={`panel-row${active ? ' active' : ''}${nested ? ' nested' : ''}${folderColor ? ' foldered' : ''}${dndCls}`}
+      style={folderColor ? ({ '--folder-color': folderColor } as CSSProperties) : undefined}
+      {...dndProps}
       onContextMenu={(e) => {
         e.preventDefault()
         openItemMenu('panel', panel.id, e.clientX, e.clientY)
@@ -200,12 +450,35 @@ function PanelButton({
   )
 }
 
+function SshRow({ conn: c, collapsed, dnd, folderColor }: { conn: SshConnection; collapsed: boolean; dnd?: RowDnd; folderColor?: string }): React.JSX.Element {
+  const openSsh = useStore((s) => s.openSsh)
+  const openItemMenu = useStore((s) => s.openItemMenu)
+  const { props: dndProps, cls: dndCls } = useRowDnd(dnd)
+  return (
+    <div
+      className={`panel-row${folderColor ? ' foldered' : ''}${dndCls}`}
+      style={folderColor ? ({ '--folder-color': folderColor } as CSSProperties) : undefined}
+      {...dndProps}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        openItemMenu('ssh', c.id, e.clientX, e.clientY)
+      }}
+    >
+      <button className="panel-item" title={`${c.username}@${c.host}:${c.port}`} onClick={() => void openSsh(c.id)}>
+        <span className="panel-icon">
+          <Icon k="ui:terminal" />
+        </span>
+        {!collapsed && <span className="panel-name">{c.name}</span>}
+      </button>
+    </div>
+  )
+}
+
 function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | null {
   const connections = useStore((s) => s.sshConnections)
   const sessions = useStore((s) => s.sshSessions)
   const activeSshId = useStore((s) => s.activeSshId)
   const page = useStore((s) => s.page)
-  const openSsh = useStore((s) => s.openSsh)
   const selectSsh = useStore((s) => s.selectSsh)
   const closeSsh = useStore((s) => s.closeSsh)
   const openSettings = useStore((s) => s.openSettings)
@@ -220,35 +493,25 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
       {!collapsed && (
         <div className="sidebar-section with-action">
           <span>{t('sshSection')}</span>
-          <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-form')}>
-            <Icon k="ui:plus" size={13} />
-          </button>
+          <span className="section-actions">
+            <SectionTools section="ssh" items={connections} />
+            <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-form')}>
+              <Icon k="ui:plus" size={13} />
+            </button>
+          </span>
         </div>
       )}
-      <div className="panel-list">
-        {connections.length === 0 && !collapsed && <div className="empty">{t('sshNone')}</div>}
-        {connections.map((c) => (
-          <div
-            className="panel-row"
-            key={c.id}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              openItemMenu('ssh', c.id, e.clientX, e.clientY)
-            }}
-          >
-            <button
-              className="panel-item"
-              title={`${c.username}@${c.host}:${c.port}`}
-              onClick={() => void openSsh(c.id)}
-            >
-              <span className="panel-icon">
-                <Icon k="ui:terminal" />
-              </span>
-              {!collapsed && <span className="panel-name">{c.name}</span>}
-            </button>
-          </div>
-        ))}
-      </div>
+      {connections.length === 0 && !collapsed && (
+        <div className="panel-list">
+          <div className="empty">{t('sshNone')}</div>
+        </div>
+      )}
+      <OrganizedList
+        section="ssh"
+        items={connections}
+        collapsed={collapsed}
+        render={(c, extra) => <SshRow key={c.id} conn={c} collapsed={collapsed} {...extra} />}
+      />
       {sessions.length > 0 && (
         <>
           {!collapsed && <div className="sidebar-section">{t('sshSessions')}</div>}
@@ -279,23 +542,6 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
         </>
       )}
     </>
-  )
-}
-
-function HomeEntry({ collapsed }: { collapsed: boolean }): React.JSX.Element {
-  const page = useStore((s) => s.page)
-  const openHome = useStore((s) => s.openHome)
-  return (
-    <div className="panel-list">
-      <div className={`panel-row${page === 'home' ? ' active' : ''}`}>
-        <button className="panel-item" title={t('homeTitle')} onClick={openHome}>
-          <span className="panel-icon">
-            <Icon k="ui:home" />
-          </span>
-          {!collapsed && <span className="panel-name">{t('homeTitle')}</span>}
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -410,7 +656,7 @@ export function Sidebar(): React.JSX.Element {
       </div>
 
       <div className="sidebar-scroll">
-        <HomeEntry collapsed={collapsed} />
+        <PinnedList collapsed={collapsed} />
 
         {!collapsed && <div className="sidebar-section">{t('proxmox')}</div>}
         <Tree collapsed={collapsed} />
@@ -418,17 +664,25 @@ export function Sidebar(): React.JSX.Element {
         {!collapsed && (
           <div className="sidebar-section with-action">
             <span>{t('panels')}</span>
-            <button className="mini" title={t('addPanel')} aria-label={t('addPanel')} onClick={() => openSettings('panels-form')}>
-              <Icon k="ui:plus" size={13} />
-            </button>
+            <span className="section-actions">
+              <SectionTools section="panels" items={listed} />
+              <button className="mini" title={t('addPanel')} aria-label={t('addPanel')} onClick={() => openSettings('panels-form')}>
+                <Icon k="ui:plus" size={13} />
+              </button>
+            </span>
           </div>
         )}
-        <div className="panel-list">
-          {listed.length === 0 && !collapsed && <div className="empty">{t('noPanels')}</div>}
-          {listed.map((p) => (
-            <PanelButton key={p.id} panel={p} collapsed={collapsed} />
-          ))}
-        </div>
+        {listed.length === 0 && !collapsed && (
+          <div className="panel-list">
+            <div className="empty">{t('noPanels')}</div>
+          </div>
+        )}
+        <OrganizedList
+          section="panels"
+          items={listed}
+          collapsed={collapsed}
+          render={(p, extra) => <PanelButton key={p.id} panel={p} collapsed={collapsed} {...extra} />}
+        />
 
         <SshSection collapsed={collapsed} />
 

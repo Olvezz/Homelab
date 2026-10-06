@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AdguardConfigInput, AdguardConfigView, Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
+import type { Panel, SshAuth, SshConnection, SshConnectionInput, SshTestResult } from '../../shared/types'
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
@@ -519,157 +519,6 @@ function Provisioning(): React.JSX.Element {
   )
 }
 
-function AdguardSettings(): React.JSX.Element {
-  const panels = useStore((s) => s.panels)
-  const showToast = useStore((s) => s.showToast)
-  const [cfg, setCfg] = useState<AdguardConfigView | null>(null)
-  const [url, setUrl] = useState('')
-  const [user, setUser] = useState('')
-  const [password, setPassword] = useState('')
-  const [clearPw, setClearPw] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    void window.api.getAdguardConfig().then((c) => {
-      setCfg(c)
-      if (c) {
-        setUrl(c.url)
-        setUser(c.username)
-      } else {
-        // Sugerencia: la dirección de un panel que se llame AdGuard
-        const p = panels.find((x) => /adguard/i.test(x.name) || /adguard/i.test(x.url))
-        if (p) {
-          try {
-            setUrl(new URL(p.url).origin)
-          } catch {
-            // URL ilegible: se deja vacío
-          }
-        }
-      }
-    })
-  }, [])
-
-  const input = (): AdguardConfigInput | null => {
-    if (!/^https?:\/\//i.test(url.trim())) {
-      setError(t('errUrl'))
-      return null
-    }
-    setError('')
-    return { url: url.trim(), username: user.trim(), password: clearPw ? '' : password || undefined }
-  }
-
-  const test = async (): Promise<void> => {
-    const i = input()
-    if (!i) return
-    setBusy(true)
-    setResult(null)
-    try {
-      setResult(await window.api.testAdguard(i))
-    } catch (e) {
-      setResult({ ok: false, message: errMsg(e) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const save = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    const i = input()
-    if (!i) return
-    try {
-      const saved = await window.api.saveAdguard(i)
-      setCfg(saved)
-      setPassword('')
-      setClearPw(false)
-      setResult(null)
-      showToast('ok', t('adgSaved'))
-    } catch (err) {
-      setError(errMsg(err))
-    }
-  }
-
-  return (
-    <>
-      <h2 id="adguard-section">{t('adgSettingsTitle')}</h2>
-      <p className="hint">{t('adgSettingsHint')}</p>
-      <form id="adguard-form" className="panel-form" onSubmit={(e) => void save(e)}>
-        <label className="field">
-          <span>{t('adgUrl')}</span>
-          <input value={url} placeholder="http://10.0.0.51:3000" spellCheck={false} onChange={(e) => setUrl(e.target.value)} />
-        </label>
-        <div className="row">
-          <label className="field grow">
-            <span>{t('adgUser')}</span>
-            <input value={user} autoComplete="off" onChange={(e) => setUser(e.target.value)} />
-          </label>
-          <label className="field grow">
-            <span>{t('adgPassword')}</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="off"
-              placeholder={cfg?.hasPassword && !clearPw ? t('keyStored') : ''}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-        </div>
-        {cfg?.hasPassword && (
-          <label className="check">
-            <input type="checkbox" checked={clearPw} onChange={(e) => setClearPw(e.target.checked)} />
-            <span>{t('clearKey')}</span>
-          </label>
-        )}
-        {error && <div className="error">{error}</div>}
-        {result && <div className={`test-result ${result.ok ? 't-ok' : 't-error'}`}>{result.message}</div>}
-        <div className="form-actions">
-          {cfg && (
-            <button
-              type="button"
-              className="btn danger"
-              onClick={() => void window.api.clearAdguard().then(() => { setCfg(null); setUrl(''); setUser(''); setPassword(''); setResult(null) })}
-            >
-              {t('adgRemove')}
-            </button>
-          )}
-          <button type="button" className="btn" disabled={busy} onClick={() => void test()}>
-            {busy ? t('testing') : t('testConn')}
-          </button>
-          <button type="submit" className="btn primary">
-            {t('save')}
-          </button>
-        </div>
-      </form>
-    </>
-  )
-}
-
-function Monitoring(): React.JSX.Element {
-  const ui = useStore((s) => s.ui)
-  const setUi = useStore((s) => s.setUi)
-  const connections = useStore((s) => s.sshConnections)
-  return (
-    <>
-      <h2 id="monitor-section">{t('monitorTitle')}</h2>
-      <p className="hint">{t('monitorHint')}</p>
-      <Toggle checked={ui.startOnHome} label={t('monitorStartHome')} onChange={(v) => setUi({ startOnHome: v })} />
-      <label className="field">
-        <span>{t('monitorSsh')}</span>
-        <select value={ui.monitorSshId ?? ''} onChange={(e) => setUi({ monitorSshId: e.target.value })}>
-          <option value="">{t('monitorSshNone')}</option>
-          {connections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} ({c.username}@{c.host})
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="hint">{t('monitorSshHint')}</p>
-    </>
-  )
-}
-
 function Updates(): React.JSX.Element {
   const update = useStore((s) => s.update)
   const autoUpdate = useStore((s) => s.ui.autoUpdate)
@@ -848,13 +697,12 @@ function Appearance(): React.JSX.Element {
   )
 }
 
-type Tab = 'general' | 'proxmox' | 'access' | 'integrations'
+type Tab = 'general' | 'proxmox' | 'access'
 
 const TABS: { id: Tab; label: Key }[] = [
   { id: 'general', label: 'tabGeneral' },
   { id: 'proxmox', label: 'tabProxmox' },
-  { id: 'access', label: 'tabAccess' },
-  { id: 'integrations', label: 'tabIntegrations' }
+  { id: 'access', label: 'tabAccess' }
 ]
 
 // Pestaña que contiene cada ancla a la que se puede saltar desde otras pantallas
@@ -862,10 +710,7 @@ const ANCHOR_TAB: Record<string, Tab> = {
   'ssh-section': 'access',
   'ssh-form': 'access',
   'panels-section': 'access',
-  'panels-form': 'access',
-  'monitor-section': 'integrations',
-  'adguard-section': 'integrations',
-  'adguard-form': 'integrations'
+  'panels-form': 'access'
 }
 
 function Card({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -1110,17 +955,6 @@ export function Settings(): React.JSX.Element {
               </button>
             </div>
           </form>
-          </Card>
-        </>
-      )}
-
-      {tab === 'integrations' && (
-        <>
-          <Card>
-            <Monitoring />
-          </Card>
-          <Card>
-            <AdguardSettings />
           </Card>
         </>
       )}

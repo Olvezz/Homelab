@@ -9,7 +9,7 @@ import {
   type ProbeResult,
   type UiConfig
 } from '../shared/types'
-import { buildExport, notesSchema, panelsSchema, parseImport, uiPatchSchema, type ConfigStore } from './config/store'
+import { buildExport, layoutSchema, notesSchema, panelsSchema, parseImport, uiPatchSchema, type ConfigStore } from './config/store'
 import {
   adguardConfigSchema,
   certDecisionSchema,
@@ -75,7 +75,8 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
       ui: currentUi(),
       pve,
       snapshot: service.getSnapshot(),
-      themeCookie: pve ? await views.readThemeCookie(pve.host) : null
+      themeCookie: pve ? await views.readThemeCookie(pve.host) : null,
+      layout: store.get().layout
     }
   })
 
@@ -88,6 +89,12 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     hub.sync()
   })
 
+  handle(IPC.layoutSave, (raw) => {
+    const layout = layoutSchema.parse(raw)
+    store.update((c) => {
+      c.layout = layout
+    })
+  })
   handle(IPC.notesGet, () => store.get().notes)
   handle(IPC.notesSave, (raw) => {
     const notes = notesSchema.parse(raw)

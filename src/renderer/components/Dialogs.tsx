@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { assignFolder, FOLDER_COLORS, removeFolder, togglePin, type LayoutSection } from '../../shared/layout'
 import { t } from '../i18n'
 import { listedPanels, useStore } from '../store'
 import { guestIconKey, Icon, panelIconKey } from './Icon'
@@ -285,6 +286,7 @@ export function ItemMenu(): React.JSX.Element | null {
   const guests = useStore((s) => s.snapshot.guests)
   const connections = useStore((s) => s.sshConnections)
   const sessions = useStore((s) => s.sshSessions)
+  const layout = useStore((s) => s.layout)
   const closeItemMenu = useStore((s) => s.closeItemMenu)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -307,6 +309,19 @@ export function ItemMenu(): React.JSX.Element | null {
   const entries: MenuEntry[] = []
   let title = ''
 
+  // Fijar y mover a carpeta (paneles y conexiones SSH)
+  const organizing = (id: string, section: LayoutSection): MenuEntry[] => {
+    const out: MenuEntry[] = [
+      { label: layout.pins.includes(id) ? t('menuUnpin') : t('menuPin'), separator: true, run: () => s.setLayout(togglePin(layout, id)) }
+    ]
+    for (const f of layout.folders.filter((x) => x.section === section && x.id !== layout.folderOf[id])) {
+      out.push({ label: t('menuMoveTo', { name: f.name }), run: () => s.setLayout(assignFolder(layout, id, f.id)) })
+    }
+    if (layout.folderOf[id]) out.push({ label: t('menuNoFolder'), run: () => s.setLayout(assignFolder(layout, id, null)) })
+    out.push({ label: t('menuNewFolder'), run: () => s.openFolderDialog({ section, assign: id }) })
+    return out
+  }
+
   if (menu.kind === 'panel') {
     const p = panels.find((x) => x.id === menu.id)
     if (!p) return null
@@ -324,6 +339,7 @@ export function ItemMenu(): React.JSX.Element | null {
       { label: t('menuOpenBrowser'), run: () => void window.api.openPanelUrl(p.url) },
       { label: t('copyUrl'), run: () => void window.api.copyText(p.url).then(() => s.showToast('ok', t('menuCopied'))) }
     )
+    if (p.kind !== 'tab') entries.push(...organizing(p.id, 'panels'))
     if (manual) {
       entries.push(
         {
@@ -359,7 +375,10 @@ export function ItemMenu(): React.JSX.Element | null {
         disabled: (panelStatus[p.id]?.state ?? 'off') === 'off',
         run: () => {
           void window.api.stopPanel(p.id)
-          if (s.page === 'view' && s.activeId === p.id) s.openHome()
+          if (s.page === 'view' && s.activeId === p.id) {
+            useStore.setState({ activeId: null, viewState: null })
+            void window.api.showView(null)
+          }
         }
       })
       entries.push({
@@ -391,6 +410,7 @@ export function ItemMenu(): React.JSX.Element | null {
         label: t('menuCopyUserHost'),
         run: () => void window.api.copyText(`${c.username}@${c.host}`).then(() => s.showToast('ok', t('menuCopied')))
       },
+      ...organizing(c.id, 'ssh'),
       {
         label: t('menuRemove'),
         danger: true,
@@ -402,6 +422,26 @@ export function ItemMenu(): React.JSX.Element | null {
             confirmLabel: t('remove'),
             danger: true,
             onConfirm: () => void window.api.deleteSsh(c.id).then(s.setSshConnections)
+          })
+      }
+    )
+  } else if (menu.kind === 'folder') {
+    const f = layout.folders.find((x) => x.id === menu.id)
+    if (!f) return null
+    title = f.name
+    entries.push(
+      { label: t('folderRename'), run: () => s.openFolderDialog({ id: f.id, section: f.section }) },
+      {
+        label: t('folderDelete'),
+        danger: true,
+        separator: true,
+        run: () =>
+          s.askConfirm({
+            title: t('folderDeleteTitle', { name: f.name }),
+            body: t('folderDeleteBody'),
+            confirmLabel: t('remove'),
+            danger: true,
+            onConfirm: () => s.setLayout(removeFolder(useStore.getState().layout, f.id))
           })
       }
     )
@@ -434,8 +474,8 @@ export function ItemMenu(): React.JSX.Element | null {
     >
       <div ref={ref} className="menu" role="menu" style={{ left, top }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="menu-title">{title}</div>
-        {entries.map((e) => (
-          <div key={e.label}>
+        {entries.map((e, i) => (
+          <div key={i}>
             {e.separator && <hr />}
             <button
               role="menuitem"
@@ -451,6 +491,86 @@ export function ItemMenu(): React.JSX.Element | null {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ---- Crear / editar carpeta ----
+
+export function FolderDialog(): React.JSX.Element | null {
+  const dialog = useStore((s) => s.folderDialog)
+  const close = useStore((s) => s.closeFolderDialog)
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const showToast = useStore((s) => s.showToast)
+  const editing = dialog?.id ? layout.folders.find((f) => f.id === dialog.id) : undefined
+  const [name, setName] = useState('')
+  const [color, setColor] = useState(FOLDER_COLORS[5])
+
+  useEffect(() => {
+    if (!dialog) return
+    setName(editing?.name ?? '')
+    setColor(editing?.color ?? FOLDER_COLORS[layout.folders.length % FOLDER_COLORS.length])
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // solo al abrir: no se pisa lo que el usuario va escribiendo
+  }, [dialog])
+
+  if (!dialog) return null
+  const submit = (e: React.FormEvent): void => {
+    e.preventDefault()
+    const clean = name.trim().slice(0, 40)
+    if (!clean) return
+    if (editing) {
+      setLayout({ ...layout, folders: layout.folders.map((f) => (f.id === editing.id ? { ...f, name: clean, color } : f)) })
+    } else {
+      if (layout.folders.length >= 50) return showToast('error', t('folderMax'))
+      const id = `folder-${crypto.randomUUID().slice(0, 8)}`
+      setLayout({
+        ...layout,
+        folders: [...layout.folders, { id, name: clean, color, section: dialog.section }],
+        folderOf: dialog.assign ? { ...layout.folderOf, [dialog.assign]: id } : layout.folderOf
+      })
+    }
+    close()
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <form className="modal" onSubmit={submit}>
+        <h2>{editing ? t('folderEditTitle') : t('folderCreateTitle')}</h2>
+        <label className="field">
+          <span>{t('folderName')}</span>
+          <input autoFocus value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div className="field">
+          <span>{t('folderColor')}</span>
+          <div className="swatches" role="radiogroup" aria-label={t('folderColor')}>
+            {FOLDER_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={c === color}
+                className={`swatch${c === color ? ' on' : ''}`}
+                style={{ background: c }}
+                onClick={() => setColor(c)}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={close}>
+            {t('cancel')}
+          </button>
+          <button type="submit" className="btn primary" disabled={!name.trim()}>
+            {editing ? t('save') : t('folderCreate')}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

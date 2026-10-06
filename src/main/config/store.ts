@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameS
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { DEFAULT_SIDEBAR_WIDTH, type Panel, type UiConfig } from '../../shared/types'
+import { defaultLayout } from '../../shared/layout'
 import { connectionSchema, fingerprintSchema, hostSchema, httpUrlSchema, portSchema } from '../ipcSchemas'
 
 export const panelSchema = z.object({
@@ -27,6 +28,26 @@ export const panelsSchema = z
 
 const themeSchema = z.string().regex(/^[a-z0-9-]{1,40}$/)
 
+const itemId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
+const sortSchema = z.enum(['az', 'za', 'custom'])
+export const layoutSchema = z.object({
+  sort: z.object({ panels: sortSchema.catch('az'), ssh: sortSchema.catch('az') }),
+  order: z.array(itemId).max(1000),
+  pins: z.array(itemId).max(200),
+  folders: z
+    .array(
+      z.object({
+        id: z.string().regex(/^folder-[A-Za-z0-9-]{1,40}$/),
+        name: z.string().trim().min(1).max(40),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        section: z.enum(['panels', 'ssh']),
+        collapsed: z.boolean().optional()
+      })
+    )
+    .max(50),
+  folderOf: z.record(itemId, z.string().regex(/^folder-[A-Za-z0-9-]{1,40}$/))
+})
+
 export const uiPatchSchema = z
   .object({
     theme: themeSchema,
@@ -35,7 +56,6 @@ export const uiPatchSchema = z
     closeToTray: z.boolean(),
     startWithWindows: z.boolean(),
     showTemplates: z.boolean(),
-    startOnHome: z.boolean(),
     monitorSshId: z.string().regex(/^ssh-[a-z0-9-]{1,40}$/).or(z.literal('')),
     autoUpdate: z.boolean(),
     lastActiveId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
@@ -49,7 +69,6 @@ const defaultUi: UiConfig = {
   closeToTray: true,
   startWithWindows: false,
   showTemplates: false,
-  startOnHome: true,
   autoUpdate: true
 }
 
@@ -117,7 +136,6 @@ const configSchema = z.object({
       closeToTray: z.boolean().catch(defaultUi.closeToTray),
       startWithWindows: z.boolean().catch(defaultUi.startWithWindows),
       showTemplates: z.boolean().catch(defaultUi.showTemplates),
-      startOnHome: z.boolean().catch(defaultUi.startOnHome),
       monitorSshId: z.string().optional().catch(undefined),
       autoUpdate: z.boolean().catch(defaultUi.autoUpdate),
       lastActiveId: z.string().optional().catch(undefined)
@@ -136,6 +154,7 @@ const configSchema = z.object({
   // Conexiones SSH guardadas (reemplazo de PuTTY) y huellas de servidor aceptadas (TOFU)
   ssh: z.array(sshConnSchema).max(200).catch([]),
   notes: notesSchema.catch([]), // apartado de notas y comandos importantes
+  layout: layoutSchema.catch(defaultLayout()), // orden, carpetas y fijados de la barra lateral
   sshHostKeys: z.record(z.string(), z.string()).catch({}),
   // Script que se ejecuta en cada guest nuevo (null = el predeterminado de la app)
   provisionScript: z.string().max(20000).nullable().catch(null)
@@ -167,7 +186,7 @@ export class ConfigStore {
     const parsed = configSchema.safeParse(raw)
     this.data = parsed.success
       ? parsed.data
-      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, adguard: null, ssh: [], sshHostKeys: {}, notes: [] }
+      : { panels: seedPanels, ui: defaultUi, trustedCerts: {}, pve: null, approvedExternal: [], provisionScript: null, adguard: null, ssh: [], sshHostKeys: {}, notes: [], layout: defaultLayout() }
 
     // Al cambiar de versión se guarda una copia del archivo anterior; los datos viven en
     // %APPDATA%, fuera de la carpeta de la app, así que instalar encima no los toca.
@@ -224,9 +243,9 @@ function statSafe(path: string): number {
 const EXPORT_FORMAT = 'homelab-desktop-config'
 
 export function buildExport(cfg: Readonly<StoredConfig>): unknown {
-  const { appVersion: _v, ...rest } = cfg
   const data: Record<string, unknown> = {
-    ...rest,
+    ...cfg,
+    appVersion: undefined,
     ui: { ...cfg.ui, lastActiveId: undefined },
     pve: cfg.pve ? { ...cfg.pve, tokenSecretEnc: null } : null,
     adguard: cfg.adguard ? { ...cfg.adguard, passwordEnc: null } : null,

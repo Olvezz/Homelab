@@ -1,3 +1,4 @@
+import type { SidebarLayout } from './layout'
 // Tipos y constantes compartidos entre main, preload y renderer.
 
 export const TOOLBAR_HEIGHT = 40
@@ -37,6 +38,7 @@ export const IPC = {
   sshImportPutty: 'ssh:import-putty',
   sshPickKey: 'ssh:pick-key',
   panelFetchIcon: 'panel:fetch-icon',
+  layoutSave: 'layout:save',
   configExport: 'config:export',
   configImport: 'config:import',
   sshOpen: 'ssh:open',
@@ -103,7 +105,6 @@ export interface UiConfig {
   closeToTray: boolean
   startWithWindows: boolean
   showTemplates: boolean
-  startOnHome: boolean // abrir el panel de inicio al arrancar
   monitorSshId?: string // conexión SSH al host Proxmox para listar procesos
   autoUpdate: boolean // comprobar y descargar actualizaciones en segundo plano
   lastActiveId?: string
@@ -196,6 +197,7 @@ export interface AppConfigView {
   pve: PveConfigView | null
   snapshot: PveSnapshot
   themeCookie: string | null // valor de PVEThemeCookie en la sesión web de Proxmox
+  layout: SidebarLayout
 }
 
 // Notas del usuario (comandos importantes, recordatorios…)
@@ -530,6 +532,7 @@ export interface Api {
   importPutty(): Promise<{ added: number; connections: SshConnection[] }>
   pickSshKey(): Promise<string | null>
   fetchPanelIcon(siteUrl: string): Promise<string | null>
+  saveLayout(layout: SidebarLayout): Promise<void>
   exportConfig(): Promise<{ path: string } | null>
   importConfig(): Promise<{ ok: boolean; error?: string } | null>
   testSsh(input: SshConnectionInput): Promise<SshTestResult>
