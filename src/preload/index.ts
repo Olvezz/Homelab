@@ -44,6 +44,7 @@ const api: Api = {
   importPutty: () => ipcRenderer.invoke(IPC.sshImportPutty),
   pickSshKey: () => ipcRenderer.invoke(IPC.sshPickKey),
   fetchPanelIcon: (siteUrl) => ipcRenderer.invoke(IPC.panelFetchIcon, siteUrl),
+  probeUrls: (urls) => ipcRenderer.invoke(IPC.mapProbe, urls),
   saveLayout: (layout) => ipcRenderer.invoke(IPC.layoutSave, layout),
   exportConfig: () => ipcRenderer.invoke(IPC.configExport),
   importConfig: () => ipcRenderer.invoke(IPC.configImport),

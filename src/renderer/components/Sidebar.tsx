@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Guest, Panel, PanelStatus, PveStatus, SshConnection } from '../../shared/types'
-import { flatOrder, moveItem, movePin, organize, togglePin, type LayoutSection, type Named, type SidebarFolder, type SortMode } from '../../shared/layout'
+import { flatOrder, moveItem, movePin, organize, togglePin, type LayoutSection, type Named, type SidebarFolder, type SidebarSection, type SortMode } from '../../shared/layout'
 import { t, type Key } from '../i18n'
 import { effectiveSidebarWidth, listedPanels, resolvePanel, useStore } from '../store'
 import { fmtAgo } from '../homeFormat'
@@ -232,6 +232,29 @@ function useRowDnd(dnd: RowDnd | undefined): { props: React.HTMLAttributes<HTMLD
 
 const SORT_KEY: Record<SortMode, Key> = { az: 'sortAz', za: 'sortZa', custom: 'sortCustom' }
 const SORT_ICON: Record<SortMode, string> = { az: 'ui:sort-az', za: 'ui:sort-za', custom: 'ui:sort-custom' }
+
+// Cabecera de una sección de la barra lateral: al pulsarla se pliega o se despliega (y se recuerda)
+function SectionHeader({ id, label, actions }: { id: SidebarSection; label: string; actions?: React.ReactNode }): React.JSX.Element {
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const closed = layout.collapsedSections.includes(id)
+  const toggle = (): void =>
+    setLayout({ ...layout, collapsedSections: closed ? layout.collapsedSections.filter((x) => x !== id) : [...layout.collapsedSections, id] })
+  return (
+    <div className="sidebar-section with-action">
+      <button className="section-toggle" aria-expanded={!closed} title={closed ? t('sectionExpand') : t('sectionCollapse')} onClick={toggle}>
+        <Icon k={closed ? 'ui:chevron-right' : 'ui:chevron-down'} size={12} />
+        {label}
+      </button>
+      {actions && <span className="section-actions">{actions}</span>}
+    </div>
+  )
+}
+
+// ¿Está plegada esta sección? (con la barra reducida a iconos nunca se pliega)
+function useClosed(id: SidebarSection, rail: boolean): boolean {
+  return useStore((s) => !rail && s.layout.collapsedSections.includes(id))
+}
 
 // Botones de la cabecera de una sección: orden (A-Z → Z-A → a mano) y nueva carpeta
 function SectionTools({ section, items }: { section: LayoutSection; items: Named[] }): React.JSX.Element {
@@ -484,6 +507,7 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
   const openSettings = useStore((s) => s.openSettings)
   const openItemMenu = useStore((s) => s.openItemMenu)
 
+  const closed = useClosed('ssh', collapsed)
   if (collapsed && connections.length === 0 && sessions.length === 0) return null
   const dot = (state: string): string =>
     state === 'open' ? 'running' : state === 'connecting' ? 'unknown' : state === 'error' ? 'bad' : 'stopped'
@@ -491,27 +515,32 @@ function SshSection({ collapsed }: { collapsed: boolean }): React.JSX.Element | 
   return (
     <>
       {!collapsed && (
-        <div className="sidebar-section with-action">
-          <span>{t('sshSection')}</span>
-          <span className="section-actions">
-            <SectionTools section="ssh" items={connections} />
-            <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-form')}>
-              <Icon k="ui:plus" size={13} />
-            </button>
-          </span>
-        </div>
+        <SectionHeader
+          id="ssh"
+          label={t('sshSection')}
+          actions={
+            <>
+              <SectionTools section="ssh" items={connections} />
+              <button className="mini" title={t('sshNew')} aria-label={t('sshNew')} onClick={() => openSettings('ssh-form')}>
+                <Icon k="ui:plus" size={13} />
+              </button>
+            </>
+          }
+        />
       )}
-      {connections.length === 0 && !collapsed && (
+      {!closed && connections.length === 0 && !collapsed && (
         <div className="panel-list">
           <div className="empty">{t('sshNone')}</div>
         </div>
       )}
-      <OrganizedList
-        section="ssh"
-        items={connections}
-        collapsed={collapsed}
-        render={(c, extra) => <SshRow key={c.id} conn={c} collapsed={collapsed} {...extra} />}
-      />
+      {!closed && (
+        <OrganizedList
+          section="ssh"
+          items={connections}
+          collapsed={collapsed}
+          render={(c, extra) => <SshRow key={c.id} conn={c} collapsed={collapsed} {...extra} />}
+        />
+      )}
       {sessions.length > 0 && (
         <>
           {!collapsed && <div className="sidebar-section">{t('sshSessions')}</div>}
@@ -629,6 +658,8 @@ export function Sidebar(): React.JSX.Element {
   const drag = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const collapsed = ui.sidebarCollapsed
+  const proxmoxClosed = useClosed('proxmox', collapsed)
+  const panelsClosed = useClosed('panels', collapsed)
   const listed = listedPanels(panels)
   const tabs = panels.filter((p) => p.kind === 'tab')
   const level = statusLevel(status)
@@ -676,31 +707,36 @@ export function Sidebar(): React.JSX.Element {
         <MapEntry collapsed={collapsed} />
         <PinnedList collapsed={collapsed} />
 
-        {!collapsed && <div className="sidebar-section">{t('proxmox')}</div>}
-        <Tree collapsed={collapsed} />
+        {!collapsed && <SectionHeader id="proxmox" label={t('proxmox')} />}
+        {!proxmoxClosed && <Tree collapsed={collapsed} />}
 
         {!collapsed && (
-          <div className="sidebar-section with-action">
-            <span>{t('panels')}</span>
-            <span className="section-actions">
-              <SectionTools section="panels" items={listed} />
-              <button className="mini" title={t('addPanel')} aria-label={t('addPanel')} onClick={() => openSettings('panels-form')}>
-                <Icon k="ui:plus" size={13} />
-              </button>
-            </span>
-          </div>
+          <SectionHeader
+            id="panels"
+            label={t('panels')}
+            actions={
+              <>
+                <SectionTools section="panels" items={listed} />
+                <button className="mini" title={t('addPanel')} aria-label={t('addPanel')} onClick={() => openSettings('panels-form')}>
+                  <Icon k="ui:plus" size={13} />
+                </button>
+              </>
+            }
+          />
         )}
-        {listed.length === 0 && !collapsed && (
+        {!panelsClosed && listed.length === 0 && !collapsed && (
           <div className="panel-list">
             <div className="empty">{t('noPanels')}</div>
           </div>
         )}
-        <OrganizedList
-          section="panels"
-          items={listed}
-          collapsed={collapsed}
-          render={(p, extra) => <PanelButton key={p.id} panel={p} collapsed={collapsed} {...extra} />}
-        />
+        {!panelsClosed && (
+          <OrganizedList
+            section="panels"
+            items={listed}
+            collapsed={collapsed}
+            render={(p, extra) => <PanelButton key={p.id} panel={p} collapsed={collapsed} {...extra} />}
+          />
+        )}
 
         <SshSection collapsed={collapsed} />
 

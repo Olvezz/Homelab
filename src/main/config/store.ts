@@ -50,7 +50,8 @@ export const layoutSchema = z.object({
       })
     )
     .max(50),
-  folderOf: z.record(itemId, z.string().regex(/^folder-[A-Za-z0-9-]{1,40}$/))
+  folderOf: z.record(itemId, z.string().regex(/^folder-[A-Za-z0-9-]{1,40}$/)),
+  collapsedSections: z.array(z.enum(['proxmox', 'panels', 'ssh'])).max(3).default([])
 })
 
 export const uiPatchSchema = z

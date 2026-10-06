@@ -1,7 +1,17 @@
-// Motor del mapa de red: disposición fija en árbol (de izquierda a derecha) + canvas. Sin física: cada nodo
+// Motor del mapa de red: disposiciones fijas (árbol, araña, vertical y bloques) + canvas. Sin física: cada nodo
 // tiene su sitio calculado y solo se desliza hasta él con una animación suave (sin rebote).
 // Sin React: la pantalla le pasa los nodos y recibe eventos.
 import type { MapNode, MapNodeType } from '../shared/map'
+
+export type ViewMode = 'tree' | 'web' | 'vertical' | 'blocks'
+export const VIEW_MODES: ViewMode[] = ['tree', 'web', 'vertical', 'blocks']
+
+interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 export interface SimNode extends MapNode {
   x: number
@@ -10,6 +20,8 @@ export interface SimNode extends MapNode {
   ty: number
   ox: number // desplazamiento manual (al arrastrar el nodo)
   oy: number
+  ang: number // ángulo en la vista de araña
+  box?: Box // recuadro de la carpeta en la vista de bloques
   children: SimNode[]
   expanded: boolean
   matched?: boolean
@@ -30,8 +42,15 @@ export const NODE_COLORS: Record<MapNodeType, string> = {
 const RADIUS: Record<MapNodeType, number> = { root: 22, net: 18, folder: 14, node: 20, vm: 16, lxc: 16, device: 16, service: 11, ext: 11 }
 const GLYPH: Partial<Record<MapNodeType, string>> = { net: 'LAN', node: 'PVE', vm: 'VM', lxc: 'CT', device: '◈' }
 
-const COL = 215 // separación entre niveles
-const ROW = 54 // separación entre filas
+const COL = 215 // árbol: separación entre niveles
+const ROW = 54 // árbol: separación entre filas
+const V_COL = 150 // vertical: separación entre hojas
+const V_ROW = 120 // vertical: separación entre niveles
+const RING = 115 // araña: separación entre anillos
+const CELL_W = 210 // bloques: tamaño de una celda
+const CELL_H = 56
+const PAD = 14
+const GAP = 12
 
 export interface EngineHooks {
   onSelect: (n: SimNode | null) => void
@@ -49,6 +68,7 @@ interface Palette {
 
 export class MapEngine {
   nodes: SimNode[] = []
+  mode: ViewMode = 'tree'
   private byId = new Map<string, SimNode>()
   private view = { k: 1, x: 0, y: 0 }
   private W = 0
@@ -68,6 +88,7 @@ export class MapEngine {
   private ctx: CanvasRenderingContext2D
   private fitted = false
   private dirty = true // hay que recalcular la disposición
+  private rings: number[] = [] // radios de la vista de araña
 
   constructor(
     private cv: HTMLCanvasElement,
@@ -107,6 +128,8 @@ export class MapEngine {
       const prev = old.get(m.id)
       const n: SimNode = {
         ...m,
+        // el estado medido (sondeo) sobrevive a los refrescos de Proxmox
+        status: prev && (m.type === 'service' || m.type === 'ext' || m.type === 'device') ? prev.status : m.status,
         children: [],
         x: prev?.x ?? 0,
         y: prev?.y ?? 0,
@@ -114,6 +137,7 @@ export class MapEngine {
         ty: 0,
         ox: prev?.ox ?? 0,
         oy: prev?.oy ?? 0,
+        ang: 0,
         expanded: prev ? prev.expanded : !(m.type === 'folder' && m.category)
       }
       map.set(n.id, n)
@@ -137,11 +161,18 @@ export class MapEngine {
     this.matchSet = null
     this.layout()
     if (old.size === 0) {
-      for (const n of next) {
-        n.x = n.tx
-        n.y = n.ty
-      }
+      this.snap()
       this.fit()
+    }
+    this.hooks.onChange()
+  }
+
+  // Estado medido de los servicios (url -> encendido): colorea el nodo y lo marca con el punto verde
+  setProbe(result: Record<string, boolean>): void {
+    for (const n of this.nodes) {
+      if (!n.url || (n.type !== 'service' && n.type !== 'ext' && n.type !== 'device')) continue
+      const up = result[n.url]
+      if (up !== undefined) n.status = up ? 'running' : 'stopped'
     }
     this.hooks.onChange()
   }
@@ -160,11 +191,32 @@ export class MapEngine {
     return a
   }
 
+  descendants(n: SimNode): SimNode[] {
+    const out: SimNode[] = []
+    const walk = (x: SimNode): void => {
+      for (const c of x.children) {
+        out.push(c)
+        walk(c)
+      }
+    }
+    walk(n)
+    return out
+  }
+
   private visible(): SimNode[] {
     return this.nodes.filter((n) => this.ancestors(n).every((a) => a.expanded))
   }
 
   // ---- acciones de la barra ----
+
+  setMode(mode: ViewMode): void {
+    if (mode === this.mode) return
+    this.mode = mode
+    for (const n of this.nodes) n.ox = n.oy = 0
+    this.dirty = true
+    this.hooks.onChange()
+    setTimeout(() => this.fit(), 350)
+  }
 
   search(q: string): void {
     const query = q.trim().toLowerCase()
@@ -199,10 +251,11 @@ export class MapEngine {
     this.afterToggle()
   }
 
-  // Devuelve cada nodo a su sitio calculado (descarta lo que se arrastró a mano)
-  tidy(): void {
+  // Reinicia la vista: cada nodo vuelve a su sitio (se descarta lo arrastrado a mano) y se reencuadra
+  reset(): void {
     for (const n of this.nodes) n.ox = n.oy = 0
     this.dirty = true
+    this.layout()
     setTimeout(() => this.fit(), 350)
   }
 
@@ -230,6 +283,13 @@ export class MapEngine {
     this.hooks.onSelect(n)
   }
 
+  private snap(): void {
+    for (const n of this.nodes) {
+      n.x = n.tx + n.ox
+      n.y = n.ty + n.oy
+    }
+  }
+
   fit(): void {
     if (this.dirty) this.layout()
     const vs = this.visible()
@@ -241,47 +301,166 @@ export class MapEngine {
     for (const n of vs) {
       const gx = n.tx + n.ox
       const gy = n.ty + n.oy
-      x0 = Math.min(x0, gx)
-      x1 = Math.max(x1, gx)
-      y0 = Math.min(y0, gy)
-      y1 = Math.max(y1, gy)
+      x0 = Math.min(x0, n.box ? n.box.x : gx)
+      x1 = Math.max(x1, n.box ? n.box.x + n.box.w : gx)
+      y0 = Math.min(y0, n.box ? n.box.y : gy)
+      y1 = Math.max(y1, n.box ? n.box.y + n.box.h : gy)
     }
-    const label = 150 // lo que ocupa el nombre del último nivel, a la derecha del nodo
-    const padX = 50
-    const padY = 60
-    const k = Math.min((this.W - padX * 2) / Math.max(x1 - x0 + label, 1), (this.H - padY * 2) / Math.max(y1 - y0, 1), 1.3)
-    this.view.k = Math.max(k, 0.3)
-    this.view.x = this.W / 2 - ((x0 + x1 + label) / 2) * this.view.k
-    this.view.y = this.H / 2 - ((y0 + y1) / 2) * this.view.k
+    // lo que ocupan los nombres que sobresalen de los nodos
+    const lx = this.mode === 'tree' ? 150 : this.mode === 'web' ? 300 : this.mode === 'blocks' ? 0 : 70
+    const ly = this.mode === 'vertical' ? 60 : 24
+    const w = Math.max(x1 - x0 + lx, 1)
+    const h = Math.max(y1 - y0 + ly, 1)
+    const k = Math.min((this.W - 100) / w, (this.H - 120) / h, 1.3)
+    this.view.k = Math.max(k, 0.25)
+    const cx = this.mode === 'web' ? (x0 + x1) / 2 : (x0 + x1 + lx) / 2
+    this.view.x = this.W / 2 - cx * this.view.k
+    this.view.y = this.H / 2 - ((y0 + y1) / 2 + ly / 2 - 10) * this.view.k
     this.fitted = true
   }
 
   // ---- disposición ----
 
-  // Árbol de izquierda a derecha: una fila por hoja visible y cada padre centrado sobre sus hijos
   private layout(): void {
-    let row = 0
-    const place = (n: SimNode, depth: number): void => {
-      n.tx = depth * COL
-      const kids = n.expanded ? n.children : []
-      if (kids.length === 0) {
-        n.ty = row++ * ROW
-        return
-      }
-      for (const c of kids) place(c, depth + 1)
-      n.ty = (kids[0].ty + kids[kids.length - 1].ty) / 2
-    }
-    for (const r of this.nodes.filter((n) => !n.parent)) place(r, 0)
+    for (const n of this.nodes) n.box = undefined
+    const roots = this.nodes.filter((n) => !n.parent)
+    if (this.mode === 'tree') this.layoutTree(roots, false)
+    else if (this.mode === 'vertical') this.layoutTree(roots, true)
+    else if (this.mode === 'web') this.layoutWeb(roots)
+    else this.layoutBlocks(roots)
     this.dirty = false
+  }
+
+  private kids(n: SimNode): SimNode[] {
+    return n.expanded ? n.children : []
+  }
+
+  // Árbol: una fila (o columna) por hoja visible y cada padre centrado sobre sus hijos
+  private layoutTree(roots: SimNode[], vertical: boolean): void {
+    let slot = 0
+    const place = (n: SimNode, depth: number): void => {
+      const kids = this.kids(n)
+      let along: number
+      if (kids.length === 0) along = slot++
+      else {
+        for (const c of kids) place(c, depth + 1)
+        const a = vertical ? kids[0].tx / V_COL : kids[0].ty / ROW
+        const b = vertical ? kids[kids.length - 1].tx / V_COL : kids[kids.length - 1].ty / ROW
+        along = (a + b) / 2
+      }
+      if (vertical) {
+        n.tx = along * V_COL
+        n.ty = depth * V_ROW
+      } else {
+        n.tx = depth * COL
+        n.ty = along * ROW
+      }
+    }
+    for (const r of roots) place(r, 0)
+  }
+
+  // Araña: la raíz en el centro y cada rama reparte su ángulo según las hojas que tiene
+  private layoutWeb(roots: SimNode[]): void {
+    const leaves = (n: SimNode): number => {
+      const kids = this.kids(n)
+      return kids.length === 0 ? 1 : kids.reduce((s, c) => s + leaves(c), 0)
+    }
+    // radio de cada anillo: lo bastante grande para que quepan sus nodos sin pisarse
+    const perDepth: number[] = []
+    const count = (n: SimNode, d: number): void => {
+      perDepth[d] = (perDepth[d] ?? 0) + 1
+      for (const c of this.kids(n)) count(c, d + 1)
+    }
+    for (const r of roots) count(r, 0)
+    this.rings = perDepth.map((cnt, d) => (d === 0 ? 0 : Math.max(d * RING, (cnt * 56) / (2 * Math.PI))))
+    for (let d = 1; d < this.rings.length; d++) this.rings[d] = Math.max(this.rings[d], this.rings[d - 1] + 90)
+
+    const place = (n: SimNode, depth: number, a0: number, a1: number): void => {
+      const mid = (a0 + a1) / 2
+      const r = this.rings[depth] ?? 0
+      n.ang = mid
+      n.tx = Math.cos(mid) * r
+      n.ty = Math.sin(mid) * r
+      const kids = this.kids(n)
+      const total = kids.reduce((s, c) => s + leaves(c), 0)
+      let a = a0
+      for (const c of kids) {
+        const span = ((a1 - a0) * leaves(c)) / total
+        place(c, depth + 1, a, a + span)
+        a += span
+      }
+    }
+    for (const r of roots) place(r, 0, -Math.PI / 2, (3 * Math.PI) / 2)
+  }
+
+  // Bloques: cada nodo abierto es un recuadro que contiene a sus hijos en cuadrícula (la jerarquía se ve por contención)
+  private layoutBlocks(roots: SimNode[]): void {
+    interface Size {
+      w: number
+      h: number
+      cols: number
+      colW: number[]
+      rowH: number[]
+    }
+    const sizes = new Map<SimNode, Size>()
+    const measure = (n: SimNode): Size => {
+      const kids = this.kids(n)
+      if (kids.length === 0) {
+        const s = { w: CELL_W, h: CELL_H, cols: 0, colW: [], rowH: [] }
+        sizes.set(n, s)
+        return s
+      }
+      const cols = kids.length <= 3 ? kids.length : Math.min(3, Math.ceil(Math.sqrt(kids.length)))
+      const rows = Math.ceil(kids.length / cols)
+      const colW = Array<number>(cols).fill(0)
+      const rowH = Array<number>(rows).fill(0)
+      kids.forEach((c, i) => {
+        const s = measure(c)
+        colW[i % cols] = Math.max(colW[i % cols], s.w)
+        rowH[Math.floor(i / cols)] = Math.max(rowH[Math.floor(i / cols)], s.h)
+      })
+      const innerW = colW.reduce((a, b) => a + b, 0) + GAP * (cols - 1)
+      const innerH = rowH.reduce((a, b) => a + b, 0) + GAP * (rows - 1)
+      const s = { w: Math.max(CELL_W, innerW) + PAD * 2, h: CELL_H + innerH + PAD * 2, cols, colW, rowH }
+      sizes.set(n, s)
+      return s
+    }
+    const place = (n: SimNode, x: number, y: number): void => {
+      const s = sizes.get(n)!
+      const kids = this.kids(n)
+      n.tx = x + (kids.length ? PAD + 14 : 28)
+      n.ty = y + CELL_H / 2 + (kids.length ? PAD / 2 : 0)
+      if (kids.length === 0) return
+      n.box = { x, y, w: s.w, h: s.h }
+      let cy = y + CELL_H + PAD
+      kids.forEach((c, i) => {
+        const col = i % s.cols
+        if (col === 0 && i > 0) cy += s.rowH[Math.floor(i / s.cols) - 1] + GAP
+        const cx = x + PAD + s.colW.slice(0, col).reduce((a, b) => a + b, 0) + GAP * col
+        place(c, cx, cy)
+      })
+    }
+    let x = 0
+    for (const r of roots) {
+      const s = measure(r)
+      place(r, x, 0)
+      x += s.w + 40
+    }
   }
 
   // Un paso de la animación: cada nodo se acerca a su sitio sin pasarse (no hay rebote)
   private tick(): void {
     if (this.dirty) this.layout()
+    const instant = this.mode === 'blocks' // los recuadros no se animan: los nodos tampoco, para que no se separen
     for (const n of this.visible()) {
       if (n === this.dragNode) continue
       const gx = n.tx + n.ox
       const gy = n.ty + n.oy
+      if (instant) {
+        n.x = gx
+        n.y = gy
+        continue
+      }
       n.x += (gx - n.x) * 0.2
       n.y += (gy - n.y) * 0.2
       if (Math.abs(gx - n.x) < 0.1) n.x = gx
@@ -324,6 +503,17 @@ export class MapEngine {
     return s
   }
 
+  // Dónde y cómo se escribe el nombre de un nodo según la vista
+  private labelAt(n: SimNode, r: number): { x: number; y: number; align: CanvasTextAlign; sub: number } {
+    if (this.mode === 'vertical') return { x: n.x, y: n.y + r + 13, align: 'center', sub: 14 }
+    if (this.mode === 'web') {
+      if (n.type === 'root') return { x: n.x, y: n.y + r + 13, align: 'center', sub: 14 }
+      const right = Math.cos(n.ang) >= -0.01
+      return { x: n.x + (right ? r + 9 : -(r + 9)), y: n.y - 7, align: right ? 'left' : 'right', sub: 15 }
+    }
+    return { x: n.x + r + 9, y: n.y - 7, align: 'left', sub: 15 }
+  }
+
   private draw(): void {
     if (this.frame++ % 45 === 0) this.readPalette()
     const { ctx, view, pal } = this
@@ -340,25 +530,62 @@ export class MapEngine {
     const hl = this.focusSet()
     const dim = (n: SimNode): boolean => (!!focus && !hl.has(n)) || (!!this.matchSet && !this.matchSet.has(n))
 
-    // aristas: curvas horizontales con degradado del color del padre al del hijo
-    for (const n of vs) {
-      const p = n.parent ? this.byId.get(n.parent) : undefined
-      if (!p) continue
-      const on = !!focus && hl.has(n) && hl.has(p)
-      ctx.globalAlpha = dim(n) ? 0.07 : on ? 1 : 0.75
-      const g = ctx.createLinearGradient(p.x, p.y, n.x, n.y)
-      g.addColorStop(0, hexA(NODE_COLORS[p.type], on ? 0.95 : 0.5))
-      g.addColorStop(1, hexA(NODE_COLORS[n.type], on ? 0.95 : 0.5))
-      ctx.strokeStyle = g
-      ctx.lineWidth = (on ? 2.6 : 1.5) / Math.max(view.k, 0.6)
-      const mx = (p.x + n.x) / 2
-      ctx.beginPath()
-      ctx.moveTo(p.x, p.y)
-      ctx.bezierCurveTo(mx, p.y, mx, n.y, n.x, n.y)
-      ctx.stroke()
+    // anillos de la araña
+    if (this.mode === 'web') {
+      ctx.strokeStyle = pal.grid
+      ctx.lineWidth = 1.2
+      ctx.globalAlpha = 0.9
+      ctx.setLineDash([2, 6])
+      const root = vs.find((n) => !n.parent)
+      for (const r of this.rings.slice(1)) {
+        ctx.beginPath()
+        ctx.arc(root?.tx ?? 0, root?.ty ?? 0, r, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      ctx.setLineDash([])
     }
 
-    // nodos: orbe translúcido con borde y núcleo brillante; el nombre a la derecha
+    // recuadros de la vista de bloques (los más externos primero)
+    if (this.mode === 'blocks') {
+      const boxed = vs.filter((n) => n.box).sort((a, b) => this.ancestors(a).length - this.ancestors(b).length)
+      for (const n of boxed) {
+        const b = n.box!
+        ctx.globalAlpha = dim(n) ? 0.25 : 1
+        roundRect(ctx, b.x, b.y, b.w, b.h, 14)
+        ctx.fillStyle = hexA(NODE_COLORS[n.type], 0.055)
+        ctx.fill()
+        ctx.setLineDash([5, 5])
+        ctx.strokeStyle = hexA(NODE_COLORS[n.type], n === focus ? 0.7 : 0.3)
+        ctx.lineWidth = n === focus ? 2 : 1.3
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
+    } else {
+      // aristas con degradado del color del padre al del hijo
+      for (const n of vs) {
+        const p = n.parent ? this.byId.get(n.parent) : undefined
+        if (!p) continue
+        const on = !!focus && hl.has(n) && hl.has(p)
+        ctx.globalAlpha = dim(n) ? 0.07 : on ? 1 : 0.75
+        const g = ctx.createLinearGradient(p.x, p.y, n.x, n.y)
+        g.addColorStop(0, hexA(NODE_COLORS[p.type], on ? 0.95 : 0.5))
+        g.addColorStop(1, hexA(NODE_COLORS[n.type], on ? 0.95 : 0.5))
+        ctx.strokeStyle = g
+        ctx.lineWidth = (on ? 2.6 : 1.5) / Math.max(view.k, 0.6)
+        ctx.beginPath()
+        ctx.moveTo(p.x, p.y)
+        if (this.mode === 'tree') {
+          const mx = (p.x + n.x) / 2
+          ctx.bezierCurveTo(mx, p.y, mx, n.y, n.x, n.y)
+        } else if (this.mode === 'vertical') {
+          const my = (p.y + n.y) / 2
+          ctx.bezierCurveTo(p.x, my, n.x, my, n.x, n.y)
+        } else ctx.lineTo(n.x, n.y)
+        ctx.stroke()
+      }
+    }
+
+    // nodos: orbe translúcido con borde y núcleo brillante
     for (const n of vs) {
       const r = RADIUS[n.type]
       const col = n.status === 'stopped' ? '#6b7280' : NODE_COLORS[n.type]
@@ -405,15 +632,16 @@ export class MapEngine {
         ctx.stroke()
       }
       const sub = n.port ? `${n.ip ?? ''}:${n.port}` : (n.ip ?? n.sub ?? '')
-      ctx.textAlign = 'left'
+      const lp = this.labelAt(n, r)
+      ctx.textAlign = lp.align
       ctx.textBaseline = 'middle'
       ctx.fillStyle = pal.text
       ctx.font = `${n.type === 'root' ? 700 : 600} 12.5px system-ui`
-      ctx.fillText(n.label, n.x + r + 9, n.y - (sub ? 7 : 0))
+      ctx.fillText(n.label, lp.x, lp.y)
       if (sub) {
         ctx.fillStyle = pal.dim
         ctx.font = '10.5px ui-monospace, Consolas, monospace'
-        ctx.fillText(sub, n.x + r + 9, n.y + 8)
+        ctx.fillText(sub, lp.x, lp.y + lp.sub)
       }
       if (this.matchSet?.has(n) && n.matched) {
         ctx.globalAlpha = 1
@@ -486,7 +714,7 @@ export class MapEngine {
     const dy = e.offsetY - this.last.y
     if (this.dragNode) {
       if (Math.hypot(dx, dy) > 3) this.moved = true
-      if (this.moved) {
+      if (this.moved && this.mode !== 'blocks') {
         // el nodo se queda donde se suelta: se guarda como desplazamiento sobre su sitio calculado
         const w = this.world(e.offsetX, e.offsetY)
         this.dragNode.x = w.x
@@ -524,7 +752,7 @@ export class MapEngine {
     e.preventDefault()
     const f = Math.exp(-e.deltaY * 0.0012)
     const w = this.world(e.offsetX, e.offsetY)
-    this.view.k = Math.min(3, Math.max(0.25, this.view.k * f))
+    this.view.k = Math.min(3, Math.max(0.2, this.view.k * f))
     this.view.x = e.offsetX - w.x * this.view.k
     this.view.y = e.offsetY - w.y * this.view.k
   }
@@ -544,6 +772,16 @@ export class MapEngine {
     if (n.children.length && !n.expanded) this.toggle(n, true)
     if (n.type === 'service' || n.type === 'ext' || n.type === 'device') this.hooks.onActivate(n)
   }
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
 }
 
 // '#rrggbb' + alfa -> rgba()

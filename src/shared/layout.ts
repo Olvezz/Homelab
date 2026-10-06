@@ -3,6 +3,7 @@
 
 export type SortMode = 'az' | 'za' | 'custom'
 export type LayoutSection = 'panels' | 'ssh'
+export type SidebarSection = 'proxmox' | 'panels' | 'ssh' // secciones de la barra lateral que se pueden plegar
 
 export interface SidebarFolder {
   id: string
@@ -18,6 +19,7 @@ export interface SidebarLayout {
   pins: string[] // fijados, en el orden en que se muestran
   folders: SidebarFolder[]
   folderOf: Record<string, string> // id de elemento -> id de carpeta
+  collapsedSections: SidebarSection[] // secciones plegadas
 }
 
 export const FOLDER_COLORS = ['#e5484d', '#f76b15', '#f5b800', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#8b8d98']
@@ -27,7 +29,8 @@ export const defaultLayout = (): SidebarLayout => ({
   order: [],
   pins: [],
   folders: [],
-  folderOf: {}
+  folderOf: {},
+  collapsedSections: []
 })
 
 export interface Named {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Panel } from '../../shared/types'
+import type { Guest, NodeInfo, Panel } from '../../shared/types'
 import { buildMap, linkTargets, MAP_KINDS, type MapKind, type MapNodeType } from '../../shared/map'
 import { errMsg, t, type Key } from '../i18n'
+import { fmtBytes, fmtRate, fmtUptime } from '../homeFormat'
 import { mapInputOf, resolvePanel, useStore } from '../store'
-import { MapEngine, NODE_COLORS, type SimNode } from '../mapEngine'
+import { MapEngine, NODE_COLORS, VIEW_MODES, type SimNode, type ViewMode } from '../mapEngine'
 
 const TYPE_KEY: Record<MapNodeType, Key> = {
   root: 'mapTypeRoot',
@@ -26,12 +27,19 @@ export const KIND_KEY: Record<MapKind, Key> = {
   other: 'mapKindOther'
 }
 
-// Entrada del mapa a partir del estado de la app (se recalcula solo cuando cambia algo relevante)
+const VIEW_KEY: Record<ViewMode, { label: Key; hint: Key }> = {
+  tree: { label: 'mapViewTree', hint: 'mapViewTreeHint' },
+  web: { label: 'mapViewWeb', hint: 'mapViewWebHint' },
+  vertical: { label: 'mapViewVertical', hint: 'mapViewVerticalHint' },
+  blocks: { label: 'mapViewBlocks', hint: 'mapViewBlocksHint' }
+}
+
 interface Grouping {
   tags: boolean
   folders: boolean
 }
 const GROUP_KEY = 'homelab.map.grouping'
+const MODE_KEY = 'homelab.map.view'
 
 function loadGrouping(): Grouping {
   try {
@@ -42,6 +50,16 @@ function loadGrouping(): Grouping {
   }
 }
 
+function loadMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(MODE_KEY)
+    return VIEW_MODES.includes(v as ViewMode) ? (v as ViewMode) : 'tree'
+  } catch {
+    return 'tree'
+  }
+}
+
+// Entrada del mapa a partir del estado de la app (se recalcula solo cuando cambia algo relevante)
 function useMapInput(group: Grouping = { tags: false, folders: false }): ReturnType<typeof mapInputOf> {
   const pve = useStore((s) => s.pve)
   const snapshot = useStore((s) => s.snapshot)
@@ -101,13 +119,171 @@ function openNode(n: SimNode): void {
   else void s.openInPve(g)
 }
 
+// ---- Consumo y estado de lo seleccionado ----
+
+const isLeaf = (n: { url?: string; type: MapNodeType }): boolean => !!n.url && (n.type === 'service' || n.type === 'ext' || n.type === 'device')
+
+type Host = { kind: 'guest'; guest: Guest } | { kind: 'node'; info: NodeInfo }
+
+// Dónde se ejecuta cada servicio: la máquina (VM/LXC) o el nodo de Proxmox de que cuelga
+function hostOf(engine: MapEngine, n: SimNode, guests: Guest[], nodes: NodeInfo[]): Host | null {
+  for (const a of engine.ancestors(n)) {
+    if (a.guestKey) {
+      const g = guests.find((x) => x.key === a.guestKey)
+      if (g) return { kind: 'guest', guest: g }
+    }
+    if (a.type === 'node') {
+      const info = nodes.find((x) => `n:${x.name}` === a.id)
+      if (info) return { kind: 'node', info }
+    }
+  }
+  return null
+}
+
+function level(f: number): string {
+  return f > 0.85 ? 'bad' : f > 0.65 ? 'warn' : 'ok'
+}
+
+function Meter({ label, fraction, text }: { label: string; fraction: number; text: string }): React.JSX.Element {
+  const f = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0))
+  return (
+    <div className="res-meter">
+      <span className="res-meter-label">{label}</span>
+      <div className="res-meter-bar">
+        <span className={level(f)} style={{ width: `${Math.round(f * 100)}%` }} />
+      </div>
+      <span className="res-meter-text">{text}</span>
+    </div>
+  )
+}
+
+// Ficha de recursos de una máquina o nodo (al estilo de la vista de Pulse): estado, CPU, RAM, disco y red
+function ResourceCard({ host, serves }: { host: Host; serves?: number }): React.JSX.Element {
+  if (host.kind === 'node') {
+    const n = host.info
+    return (
+      <div className="res-card">
+        <div className="res-head">
+          <span className={`dot ${n.online ? 'running' : 'stopped'}`} />
+          <b>{t('mapNodeCard', { name: n.name })}</b>
+          <small>{n.online ? t('mapOn') : t('mapOff')}</small>
+        </div>
+        {n.online ? (
+          <>
+            <Meter label={t('mapCpu')} fraction={n.cpu} text={`${Math.round(n.cpu * 100)} %`} />
+            <Meter label={t('mapRam')} fraction={n.maxmem ? n.mem / n.maxmem : 0} text={`${fmtBytes(n.mem)} / ${fmtBytes(n.maxmem)}`} />
+            <Meter label={t('mapDisk')} fraction={n.maxdisk ? n.disk / n.maxdisk : 0} text={`${fmtBytes(n.disk)} / ${fmtBytes(n.maxdisk)}`} />
+            <div className="res-foot">
+              {t('mapUptimeLabel')} {fmtUptime(n.uptime)}
+            </div>
+          </>
+        ) : null}
+      </div>
+    )
+  }
+  const g = host.guest
+  const running = g.status === 'running'
+  return (
+    <div className="res-card">
+      <div className="res-head">
+        <span className={`dot ${running ? 'running' : g.status === 'stopped' ? 'stopped' : 'unknown'}`} />
+        <b>
+          {g.vmid} {g.name}
+        </b>
+        <small>{g.type === 'lxc' ? 'LXC' : 'VM'}</small>
+      </div>
+      {serves !== undefined && serves > 0 && <div className="res-foot">{t('mapServes', { n: serves })}</div>}
+      {running ? (
+        <>
+          <Meter label={t('mapCpu')} fraction={g.cpu} text={`${Math.round(g.cpu * 100)} % · ${g.maxcpu} vCPU`} />
+          <Meter label={t('mapRam')} fraction={g.maxmem ? g.mem / g.maxmem : 0} text={`${fmtBytes(g.mem)} / ${fmtBytes(g.maxmem)}`} />
+          {g.maxdisk > 0 && <Meter label={t('mapDisk')} fraction={g.disk / g.maxdisk} text={`${fmtBytes(g.disk)} / ${fmtBytes(g.maxdisk)}`} />}
+          <div className="res-foot">
+            ↓ {fmtRate(g.netInRate)} · ↑ {fmtRate(g.netOutRate)} · {t('mapUptimeLabel')} {fmtUptime(g.uptime)}
+          </div>
+        </>
+      ) : (
+        <div className="res-foot">{g.status === 'stopped' ? t('mapOff') : t('mapUnknown')}</div>
+      )}
+    </div>
+  )
+}
+
+const MAX_CARDS = 8
+
+// Lo que se está consumiendo dentro del nodo seleccionado: máquinas que alojan sus servicios, y estado de cada servicio
+function Usage({ engine, n, guests, nodes }: { engine: MapEngine; n: SimNode; guests: Guest[]; nodes: NodeInfo[] }): React.JSX.Element | null {
+  const all = [n, ...engine.descendants(n)]
+  const services = all.filter(isLeaf)
+  const hosts = new Map<string, { host: Host; serves: number }>()
+  const add = (h: Host | null, serves: number): void => {
+    if (!h) return
+    const key = h.kind === 'guest' ? `g:${h.guest.key}` : `n:${h.info.name}`
+    const cur = hosts.get(key)
+    if (cur) cur.serves += serves
+    else hosts.set(key, { host: h, serves })
+  }
+  // la propia máquina o nodo seleccionados, y las máquinas que contiene (tag, nodo)
+  for (const x of all) {
+    if (x.guestKey) {
+      const g = guests.find((y) => y.key === x.guestKey)
+      if (g) add({ kind: 'guest', guest: g }, 0)
+    } else if (x.type === 'node') {
+      const info = nodes.find((y) => `n:${y.name}` === x.id)
+      if (info) add({ kind: 'node', info }, 0)
+    }
+  }
+  for (const s of services) add(hostOf(engine, s, guests, nodes), 1)
+
+  const cards = [...hosts.values()]
+  const up = services.filter((s) => s.status === 'running').length
+  const down = services.filter((s) => s.status === 'stopped').length
+  if (cards.length === 0 && services.length === 0) return null
+  return (
+    <>
+      {cards.length > 0 && (
+        <>
+          <h3 className="map-sub">{t('mapRes')}</h3>
+          <div className="res-list">
+            {cards.slice(0, MAX_CARDS).map((c) => (
+              <ResourceCard key={c.host.kind === 'guest' ? c.host.guest.key : c.host.info.name} host={c.host} serves={c.serves} />
+            ))}
+            {cards.length > MAX_CARDS && <small className="dim">{t('mapMore', { n: cards.length - MAX_CARDS })}</small>}
+          </div>
+        </>
+      )}
+      {services.length > 0 && (
+        <>
+          <h3 className="map-sub">
+            {t('mapServices')} · {t('mapServicesUp', { up, total: services.length })}
+            {down > 0 && <span className="down-count"> · {t('mapDownCount', { n: down })}</span>}
+          </h3>
+          <div className="svc-list">
+            {services.slice(0, 40).map((s) => (
+              <button key={s.id} className="svc" onClick={() => openNode(s)} title={s.url}>
+                <span className={`dot ${s.status === 'running' ? 'running' : s.status === 'stopped' ? 'stopped' : 'unknown'}`} />
+                <span className="svc-name">{s.label}</span>
+                <small>{s.port ? `:${s.port}` : ''}</small>
+                <small className="svc-state">{s.status === 'running' ? t('mapOn') : s.status === 'stopped' ? t('mapOff') : t('mapUnknown')}</small>
+              </button>
+            ))}
+            {services.length > 40 && <small className="dim">{t('mapMore', { n: services.length - 40 })}</small>}
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 export function NetworkMap(): React.JSX.Element {
   const [group, setGroup] = useState<Grouping>(loadGrouping)
+  const [mode, setModeState] = useState<ViewMode>(loadMode)
   const input = useMapInput(group)
   const nodes = useMemo(() => buildMap(input), [input])
   // Solo se recarga el grafo si el contenido cambió de verdad (los sondeos de Proxmox renuevan el estado cada pocos segundos)
   const sig = useMemo(() => JSON.stringify(nodes), [nodes])
   const panels = useStore((s) => s.panels)
+  const snapshot = useStore((s) => s.snapshot)
   const saveManualPanels = useStore((s) => s.saveManualPanels)
   const showToast = useStore((s) => s.showToast)
 
@@ -127,6 +303,7 @@ export function NetworkMap(): React.JSX.Element {
       onHover: (n, x, y) => setTip(n ? { n, x, y } : null),
       onChange: () => redraw((v) => v + 1)
     })
+    engine.mode = loadMode()
     engineRef.current = engine
     engine.setNodes(latest.current)
     return () => {
@@ -139,6 +316,27 @@ export function NetworkMap(): React.JSX.Element {
     engineRef.current?.setNodes(latest.current)
   }, [sig])
 
+  // ¿Están encendidos los servicios? Se comprueba cada 20 s mientras el mapa está abierto
+  useEffect(() => {
+    let alive = true
+    const run = (): void => {
+      const urls = [...new Set(latest.current.filter(isLeaf).map((n) => n.url!))].slice(0, 80)
+      if (urls.length === 0) return
+      window.api
+        .probeUrls(urls)
+        .then((r) => {
+          if (alive) engineRef.current?.setProbe(r)
+        })
+        .catch(() => undefined)
+    }
+    run()
+    const id = setInterval(run, 20_000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [sig])
+
   const engine = engineRef.current
   const changeGroup = (g: Grouping): void => {
     setGroup(g)
@@ -148,6 +346,16 @@ export function NetworkMap(): React.JSX.Element {
       // sin almacenamiento: la opción vale solo en esta sesión
     }
   }
+  const changeMode = (m: ViewMode): void => {
+    setModeState(m)
+    engineRef.current?.setMode(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      // sin almacenamiento: la vista vale solo en esta sesión
+    }
+  }
+
   const manual = panels.filter((p) => p.source === 'manual' && p.kind !== 'tab')
   const editPanel = (id: string, patch: Partial<Pick<Panel, 'mapKind' | 'mapLink'>>): void => {
     void saveManualPanels(manual.map((p) => (p.id === id ? { ...p, ...patch } : p))).catch((e) => showToast('error', errMsg(e)))
@@ -178,6 +386,7 @@ export function NetworkMap(): React.JSX.Element {
     const path = [...engine.ancestors(n).reverse(), n].map((x) => x.label).join('  ›  ')
     const own = n.panelId ? manual.find((p) => p.id === n.panelId) : undefined
     const canOpen = !!n.panelId || !!n.guestKey
+    const others = n.children.filter((c) => !isLeaf(c)) // lo que no es servicio (carpetas, máquinas) sigue en «Contiene»
     return (
       <>
         <h2>{n.label}</h2>
@@ -206,7 +415,7 @@ export function NetworkMap(): React.JSX.Element {
           {n.status !== 'unknown' && (
             <>
               <span>{t('mapState')}</span>
-              <span>{n.status === 'running' ? t('mapOn') : t('mapOff')}</span>
+              <span>{n.status === 'running' ? t('mapOnDot') : t('mapOff')}</span>
             </>
           )}
           {n.url && (
@@ -228,6 +437,7 @@ export function NetworkMap(): React.JSX.Element {
             </button>
           )}
         </div>
+        {n.type !== 'root' && n.type !== 'net' && <Usage engine={engine} n={n} guests={snapshot.guests} nodes={snapshot.nodes} />}
         {own && (
           <div className="map-edit">
             <label className="field">
@@ -240,13 +450,13 @@ export function NetworkMap(): React.JSX.Element {
             </label>
           </div>
         )}
-        {n.children.length > 0 && (
+        {others.length > 0 && (
           <>
             <h3 className="map-sub">
-              {t('mapContains')} ({n.children.length})
+              {t('mapContains')} ({others.length})
             </h3>
             <div className="kids">
-              {n.children.map((c) => (
+              {others.map((c) => (
                 <button
                   key={c.id}
                   className="kid"
@@ -257,7 +467,7 @@ export function NetworkMap(): React.JSX.Element {
                 >
                   <span className="dot" style={{ background: NODE_COLORS[c.type] }} />
                   <span className="kid-name">{c.label}</span>
-                  <small>{c.port ? `:${c.port}` : c.children.length ? `${c.children.length} ›` : ''}</small>
+                  <small>{c.children.length ? `${c.children.length} ›` : ''}</small>
                 </button>
               ))}
             </div>
@@ -282,6 +492,13 @@ export function NetworkMap(): React.JSX.Element {
             engine?.search(e.target.value)
           }}
         />
+        <div className="seg" role="group" aria-label={t('mapView')}>
+          {VIEW_MODES.map((m) => (
+            <button key={m} className={mode === m ? 'on' : ''} aria-pressed={mode === m} title={t(VIEW_KEY[m].hint)} onClick={() => changeMode(m)}>
+              {t(VIEW_KEY[m].label)}
+            </button>
+          ))}
+        </div>
         <label className="map-check" title={t('mapGroupTagsHint')}>
           <input type="checkbox" checked={group.tags} onChange={(e) => changeGroup({ ...group, tags: e.target.checked })} />
           {t('mapGroupTags')}
@@ -296,8 +513,8 @@ export function NetworkMap(): React.JSX.Element {
         <button className="btn small" onClick={() => engine?.collapse()}>
           {t('mapCollapse')}
         </button>
-        <button className="btn small" onClick={() => engine?.tidy()} title={t('mapTidyHint')}>
-          {t('mapTidy')}
+        <button className="btn small" onClick={() => engine?.reset()} title={t('mapResetHint')}>
+          {t('mapReset')}
         </button>
         <button className="btn small primary" onClick={() => engine?.fit()}>
           {t('mapFit')}

@@ -39,6 +39,7 @@ export const IPC = {
   sshImportPutty: 'ssh:import-putty',
   sshPickKey: 'ssh:pick-key',
   panelFetchIcon: 'panel:fetch-icon',
+  mapProbe: 'map:probe',
   layoutSave: 'layout:save',
   configExport: 'config:export',
   configImport: 'config:import',
@@ -535,6 +536,7 @@ export interface Api {
   importPutty(): Promise<{ added: number; connections: SshConnection[] }>
   pickSshKey(): Promise<string | null>
   fetchPanelIcon(siteUrl: string): Promise<string | null>
+  probeUrls(urls: string[]): Promise<Record<string, boolean>>
   saveLayout(layout: SidebarLayout): Promise<void>
   exportConfig(): Promise<{ path: string } | null>
   importConfig(): Promise<{ ok: boolean; error?: string } | null>
