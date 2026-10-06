@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { assignFolder, FOLDER_COLORS, removeFolder, togglePin, type LayoutSection } from '../../shared/layout'
 import { t } from '../i18n'
+import { SHORTCUTS } from '../shortcuts'
 import { listedPanels, useStore } from '../store'
 import { guestIconKey, Icon, panelIconKey } from './Icon'
 
@@ -571,6 +572,57 @@ export function FolderDialog(): React.JSX.Element | null {
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+// ---- Atajos de teclado (F1) ----
+
+export function ShortcutsDialog(): React.JSX.Element | null {
+  const open = useStore((s) => s.helpOpen)
+  const setHelp = useStore((s) => s.setHelp)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' || e.key === 'F1') {
+        e.preventDefault()
+        setHelp(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, setHelp])
+
+  if (!open) return null
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t('shortcutsTitle')} onMouseDown={() => setHelp(false)}>
+      <div className="modal shortcuts" onMouseDown={(e) => e.stopPropagation()}>
+        <h2>{t('shortcutsTitle')}</h2>
+        <p>{t('shortcutsHint')}</p>
+        {SHORTCUTS.map((g) => (
+          <section key={g.title}>
+            <h3>{g.title}</h3>
+            <dl>
+              {g.items.map((it) => (
+                <div key={it.text} className="sc-row">
+                  <dt>
+                    {it.keys.map((k) => (
+                      <kbd key={k}>{k}</kbd>
+                    ))}
+                  </dt>
+                  <dd>{it.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+        <div className="modal-actions">
+          <button className="btn primary" autoFocus onClick={() => setHelp(false)}>
+            {t('close')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

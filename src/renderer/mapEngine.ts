@@ -190,6 +190,11 @@ export class MapEngine {
     this.hooks.onChange()
   }
 
+  // Nodo seleccionado (o null)
+  get current(): SimNode | null {
+    return this.selected
+  }
+
   get(id: string): SimNode | undefined {
     return this.byId.get(id)
   }
@@ -265,6 +270,16 @@ export class MapEngine {
   collapse(): void {
     for (const n of this.nodes) n.expanded = n.type === 'root' || n.type === 'net' || n.type === 'node'
     this.afterToggle()
+  }
+
+  // Acerca o aleja desde el centro de la vista (teclas + y -)
+  zoom(factor: number): void {
+    const cx = this.W / 2
+    const cy = this.H / 2
+    const w = this.world(cx, cy)
+    this.view.k = Math.min(3, Math.max(0.2, this.view.k * factor))
+    this.view.x = cx - w.x * this.view.k
+    this.view.y = cy - w.y * this.view.k
   }
 
   // Reinicia la vista: cada nodo vuelve a su sitio (se descarta lo arrastrado a mano) y se reencuadra

@@ -2595,3 +2595,51 @@ ul.blocked {
 .section-toggle:hover {
   color: var(--text);
 }
+
+/* Ventana de atajos de teclado */
+.modal.shortcuts {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.shortcuts h3 {
+  margin: 16px 0 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shortcuts dl {
+  margin: 0;
+}
+
+.sc-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-muted);
+  font-size: 13px;
+}
+
+.sc-row dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sc-row dd {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg);
+  font: 600 11.5px ui-monospace, Consolas, monospace;
+}

@@ -851,6 +851,9 @@ export function Settings(): React.JSX.Element {
             <Toggle checked={ui.closeToTray} label={t('closeToTray')} onChange={(v) => setUi({ closeToTray: v })} />
             <Toggle checked={ui.startWithWindows} label={t('startWithWindows')} onChange={(v) => setUi({ startWithWindows: v })} />
             <Toggle checked={ui.showTemplates} label={t('showTemplates')} onChange={(v) => setUi({ showTemplates: v })} />
+            <button className="btn small" onClick={() => useStore.getState().setHelp(true)}>
+              {t('shortcutsOpen')}
+            </button>
           </Card>
           <Card>
             <Updates />

@@ -63,6 +63,8 @@ interface State {
   sshDraft: Partial<SshConnectionInput> | null // conexión nueva con datos de un guest
   settingsAnchor: string | null // sección de Ajustes a la que desplazarse al abrir
   layout: SidebarLayout // orden, carpetas y fijados de la barra lateral
+  helpOpen: boolean // ventana de atajos de teclado
+  refreshTick: number // sube al pulsar F5 en el mapa (vuelve a leer y a comprobar los servicios)
   folderDialog: { id?: string; section: LayoutSection; assign?: string } | null // crear/editar carpeta (assign: elemento a meter en ella)
 
   init: () => Promise<void>
@@ -76,6 +78,7 @@ interface State {
   saveManualPanels: (panels: Panel[]) => Promise<void>
   setUi: (patch: Partial<UiConfig>) => void
   setLayout: (next: SidebarLayout) => void
+  setHelp: (open: boolean) => void
   openFolderDialog: (d: { id?: string; section: LayoutSection; assign?: string }) => void
   closeFolderDialog: () => void
   setSidebarWidthLive: (width: number) => void
@@ -193,6 +196,8 @@ export const useStore = create<State>((set, get) => ({
   settingsAnchor: null,
   layout: defaultLayout(),
   folderDialog: null,
+  helpOpen: false,
+  refreshTick: 0,
 
   init: async () => {
     const { panels, ui, pve, snapshot, themeCookie, layout } = await window.api.getConfig()
@@ -297,6 +302,7 @@ export const useStore = create<State>((set, get) => ({
     set({ layout })
     void window.api.saveLayout(layout)
   },
+  setHelp: (helpOpen) => set({ helpOpen, menu: null, itemMenu: null }),
   openFolderDialog: (folderDialog) => set({ folderDialog, itemMenu: null }),
   closeFolderDialog: () => set({ folderDialog: null }),
 
@@ -444,11 +450,51 @@ export const useStore = create<State>((set, get) => ({
 
 function handleShortcut(sc: Shortcut): void {
   const s = useStore.getState()
-  if (sc === 'search') s.setSearch(true)
-  else if (sc === 'toggleSidebar') s.setUi({ sidebarCollapsed: !s.ui.sidebarCollapsed })
-  else {
-    const n = Number(sc.slice('panel:'.length))
-    const panel = visiblePanels(s.panels, s.layout)[n - 1]
-    if (panel) s.selectPanel(panel.id)
+  switch (sc) {
+    case 'search':
+      s.setSearch(true)
+      return
+    case 'toggleSidebar':
+      s.setUi({ sidebarCollapsed: !s.ui.sidebarCollapsed })
+      return
+    case 'help':
+      s.setHelp(!s.helpOpen)
+      return
+    case 'map':
+      s.openMap()
+      return
+    case 'settings':
+      s.openSettings()
+      return
+    case 'newPanel':
+      s.openSettings('panels-form')
+      return
+    case 'refresh':
+      // En un panel recarga la página; en el mapa vuelve a leer Proxmox y a comprobar los servicios
+      if (s.page === 'view' && s.activeId) void window.api.nav('reload')
+      else {
+        void window.api.pveRefresh()
+        useStore.setState((st) => ({ refreshTick: st.refreshTick + 1 }))
+      }
+      return
+    case 'closeTab': {
+      if (s.page === 'ssh' && s.activeSshId) s.closeSsh(s.activeSshId)
+      else if (s.page === 'view' && s.activeId && s.panels.find((p) => p.id === s.activeId)?.kind === 'tab') s.closeTab(s.activeId)
+      return
+    }
+    case 'nextPanel':
+    case 'prevPanel': {
+      const list = visiblePanels(s.panels, s.layout)
+      if (list.length === 0) return
+      const i = list.findIndex((p) => p.id === s.activeId)
+      const step = sc === 'nextPanel' ? 1 : -1
+      s.selectPanel(list[(i + step + list.length * 2) % list.length].id)
+      return
+    }
+    default: {
+      const n = Number(sc.slice('panel:'.length))
+      const panel = visiblePanels(s.panels, s.layout)[n - 1]
+      if (panel) s.selectPanel(panel.id)
+    }
   }
 }

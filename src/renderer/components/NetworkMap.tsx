@@ -295,6 +295,8 @@ export function NetworkMap(): React.JSX.Element {
   const [tip, setTip] = useState<{ n: SimNode; x: number; y: number } | null>(null)
   const [, redraw] = useState(0)
   const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
+  const refreshTick = useStore((st) => st.refreshTick)
 
   useEffect(() => {
     const engine = new MapEngine(canvasRef.current!, {
@@ -335,7 +337,7 @@ export function NetworkMap(): React.JSX.Element {
       alive = false
       clearInterval(id)
     }
-  }, [sig])
+  }, [sig, refreshTick])
 
   const engine = engineRef.current
   const changeGroup = (g: Grouping): void => {
@@ -355,6 +357,52 @@ export function NetworkMap(): React.JSX.Element {
       // sin almacenamiento: la vista vale solo en esta sesión
     }
   }
+
+  // Teclado del mapa: Esc quita la selección; / o Ctrl+F busca; 0 reencuadra; + y - zoom; 1-4 vistas; R reinicia; E y C expanden y colapsan; Intro abre
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const eng = engineRef.current
+      const el = e.target as HTMLElement | null
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if (!eng) return
+      if (e.key === 'Escape') {
+        if (typing && el === searchRef.current && searchRef.current?.value) {
+          setQuery('')
+          eng.search('')
+          return
+        }
+        if (typing) el?.blur()
+        eng.select(null)
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+        return
+      }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+      const key = e.key.toLowerCase()
+      const mode = ['1', '2', '3', '4'].indexOf(key)
+      if (key === '/') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (key === '0' || key === 'home') eng.fit()
+      else if (key === '+' || key === '=') eng.zoom(1.2)
+      else if (key === '-') eng.zoom(1 / 1.2)
+      else if (mode >= 0) changeMode(VIEW_MODES[mode])
+      else if (key === 'r') eng.reset()
+      else if (key === 'e') eng.expandAll()
+      else if (key === 'c') eng.collapse()
+      else if (key === 'enter' && eng.current) {
+        if (eng.current.panelId || eng.current.guestKey) openNode(eng.current)
+        else if (eng.current.children.length) eng.toggle(eng.current)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // changeMode solo usa el motor y un setter: no hace falta recrear el listener
+  }, [])
 
   const manual = panels.filter((p) => p.source === 'manual' && p.kind !== 'tab')
   const editPanel = (id: string, patch: Partial<Pick<Panel, 'mapKind' | 'mapLink'>>): void => {
@@ -484,6 +532,7 @@ export function NetworkMap(): React.JSX.Element {
       <header className="map-bar">
         <h1>{t('mapTitle')}</h1>
         <input
+          ref={searchRef}
           value={query}
           placeholder={t('mapSearch')}
           aria-label={t('mapSearch')}

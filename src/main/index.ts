@@ -123,8 +123,45 @@ function createWindow(store: ConfigStore): void {
         wc.paste()
         return
       }
+      // Teclas sin Ctrl (con un terminal SSH delante se dejan pasar al shell)
+      if (!terminalActive && !input.meta) {
+        if (key === 'f5') {
+          event.preventDefault()
+          send(IPC.shortcut, 'refresh' satisfies Shortcut)
+          return
+        }
+        if (key === 'f1') {
+          event.preventDefault()
+          send(IPC.shortcut, 'help' satisfies Shortcut)
+          return
+        }
+        if (input.alt && !input.control && (key === 'arrowleft' || key === 'arrowright')) {
+          event.preventDefault()
+          views.nav(key === 'arrowleft' ? 'back' : 'forward')
+          return
+        }
+      }
       if (terminalActive || !input.control || input.alt || input.meta) return
-      if (key === 'r') {
+      const go = (sc: Shortcut): void => {
+        event.preventDefault()
+        send(IPC.shortcut, sc)
+      }
+      if (key === 'tab') go(input.shift ? 'prevPanel' : 'nextPanel')
+      else if (key === 'm') go('map')
+      else if (key === ',') go('settings')
+      else if (key === 'n') go('newPanel')
+      else if (key === 'w') go('closeTab')
+      else if (key === '/' || key === '?') go('help')
+      else if (key === '=' || key === '+') {
+        event.preventDefault()
+        views.nav('zoomIn')
+      } else if (key === '-') {
+        event.preventDefault()
+        views.nav('zoomOut')
+      } else if (key === '0') {
+        event.preventDefault()
+        views.nav('zoomReset')
+      } else if (key === 'r') {
         event.preventDefault()
         if (input.shift) service.refresh()
         else views.nav('reload')

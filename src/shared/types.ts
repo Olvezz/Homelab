@@ -464,7 +464,18 @@ export interface ToastMessage {
   text: string
 }
 
-export type Shortcut = 'search' | 'toggleSidebar' | `panel:${number}`
+export type Shortcut =
+  | 'search'
+  | 'toggleSidebar'
+  | 'refresh'
+  | 'map'
+  | 'settings'
+  | 'newPanel'
+  | 'closeTab'
+  | 'nextPanel'
+  | 'prevPanel'
+  | 'help'
+  | `panel:${number}`
 
 export type NavAction =
   | 'back'
