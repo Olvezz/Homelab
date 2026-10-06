@@ -2,10 +2,17 @@ appId: local.olvezz.homelab-desktop
 productName: HomeLab Desktop
 directories:
   buildResources: resources
+copyright: Copyright © 2026 Olvezz. Todos los derechos reservados.
 files:
   - out/**/*
   - package.json
   - resources/**/*
+# Los documentos legales viajan junto a la aplicación (carpeta resources/legal)
+extraResources:
+  - from: legal
+    to: legal
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
 win:
   target: nsis
   artifactName: HomeLab-Desktop-Setup-${version}.${ext}

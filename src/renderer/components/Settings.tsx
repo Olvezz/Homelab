@@ -6,6 +6,7 @@ import { resolveTheme, THEMES } from '../theme'
 import type { MapKind } from '../../shared/map'
 import { Icon, ICON_CHOICES, isKnownIcon, PanelIcon } from './Icon'
 import { KindSelect, LinkSelect } from './NetworkMap'
+import { LEGAL_DOCS } from '../legal'
 
 interface Draft {
   id: string | null // null = panel nuevo
@@ -860,6 +861,17 @@ export function Settings(): React.JSX.Element {
           </Card>
           <Card>
             <Backup />
+          </Card>
+          <Card>
+            <h2>{t('legalTitle')}</h2>
+            <p className="hint">{t('legalHint')}</p>
+            <div className="row">
+              {LEGAL_DOCS.map((d) => (
+                <button key={d.id} className="btn small" onClick={() => useStore.getState().openLegal(d.id)}>
+                  {d.title}
+                </button>
+              ))}
+            </div>
           </Card>
         </>
       )}

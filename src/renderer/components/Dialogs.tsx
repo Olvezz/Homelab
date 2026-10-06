@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { assignFolder, FOLDER_COLORS, removeFolder, togglePin, type LayoutSection } from '../../shared/layout'
 import { t } from '../i18n'
 import { SHORTCUTS } from '../shortcuts'
+import { LEGAL_DOCS } from '../legal'
+import { inline, parseMarkdown, type Block } from '../markdownLite'
 import { listedPanels, useStore } from '../store'
 import { guestIconKey, Icon, panelIconKey } from './Icon'
 
@@ -619,6 +621,119 @@ export function ShortcutsDialog(): React.JSX.Element | null {
         ))}
         <div className="modal-actions">
           <button className="btn primary" autoFocus onClick={() => setHelp(false)}>
+            {t('close')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- Documentos legales ----
+
+function Inline({ text }: { text: string }): React.JSX.Element {
+  return (
+    <>
+      {inline(text).map((sp, i) => (sp.bold ? <strong key={i}>{sp.text}</strong> : sp.code ? <code key={i}>{sp.text}</code> : <span key={i}>{sp.text}</span>))}
+    </>
+  )
+}
+
+function BlockView({ b }: { b: Block }): React.JSX.Element {
+  switch (b.t) {
+    case 'h1':
+      return <h2 className="doc-h1">{b.text}</h2>
+    case 'h2':
+      return <h3 className="doc-h2">{b.text}</h3>
+    case 'h3':
+      return <h4 className="doc-h3">{b.text}</h4>
+    case 'quote':
+      return (
+        <blockquote>
+          <Inline text={b.text} />
+        </blockquote>
+      )
+    case 'ul':
+      return (
+        <ul>
+          {b.items.map((it, i) => (
+            <li key={i}>
+              <Inline text={it} />
+            </li>
+          ))}
+        </ul>
+      )
+    case 'table':
+      return (
+        <div className="doc-table">
+          <table>
+            <thead>
+              <tr>
+                {b.head.map((h, i) => (
+                  <th key={i}>
+                    <Inline text={h} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {b.rows.map((r, i) => (
+                <tr key={i}>
+                  {r.map((c, j) => (
+                    <td key={j}>
+                      <Inline text={c} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    case 'code':
+      return <pre>{b.text}</pre>
+    default:
+      return (
+        <p>
+          <Inline text={b.text} />
+        </p>
+      )
+  }
+}
+
+export function LegalDialog(): React.JSX.Element | null {
+  const id = useStore((s) => s.legalDoc)
+  const openLegal = useStore((s) => s.openLegal)
+  const doc = LEGAL_DOCS.find((d) => d.id === id)
+  const blocks = useMemo(() => (doc ? parseMarkdown(doc.body) : []), [doc])
+
+  useEffect(() => {
+    if (!id) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') openLegal(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [id, openLegal])
+
+  if (!doc) return null
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={doc.title} onMouseDown={() => openLegal(null)}>
+      <div className="modal legal-doc" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="legal-tabs" role="tablist">
+          {LEGAL_DOCS.map((d) => (
+            <button key={d.id} role="tab" aria-selected={d.id === id} className={d.id === id ? 'on' : ''} onClick={() => openLegal(d.id)}>
+              {d.title}
+            </button>
+          ))}
+        </div>
+        <article className="legal-body" tabIndex={0}>
+          {blocks.map((b, i) => (
+            <BlockView key={i} b={b} />
+          ))}
+        </article>
+        <div className="modal-actions">
+          <button className="btn primary" autoFocus onClick={() => openLegal(null)}>
             {t('close')}
           </button>
         </div>

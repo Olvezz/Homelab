@@ -18,6 +18,7 @@ import {
   type UpdateStatus,
   type ViewState
 } from '../shared/types'
+import type { LegalId } from './legal'
 import type { MapInput } from '../shared/map'
 import { defaultLayout, organize, type LayoutSection, type SidebarLayout } from '../shared/layout'
 import { errMsg, t } from './i18n'
@@ -64,6 +65,7 @@ interface State {
   settingsAnchor: string | null // sección de Ajustes a la que desplazarse al abrir
   layout: SidebarLayout // orden, carpetas y fijados de la barra lateral
   helpOpen: boolean // ventana de atajos de teclado
+  legalDoc: LegalId | null // documento legal abierto
   refreshTick: number // sube al pulsar F5 en el mapa (vuelve a leer y a comprobar los servicios)
   folderDialog: { id?: string; section: LayoutSection; assign?: string } | null // crear/editar carpeta (assign: elemento a meter en ella)
 
@@ -79,6 +81,7 @@ interface State {
   setUi: (patch: Partial<UiConfig>) => void
   setLayout: (next: SidebarLayout) => void
   setHelp: (open: boolean) => void
+  openLegal: (id: LegalId | null) => void
   openFolderDialog: (d: { id?: string; section: LayoutSection; assign?: string }) => void
   closeFolderDialog: () => void
   setSidebarWidthLive: (width: number) => void
@@ -197,6 +200,7 @@ export const useStore = create<State>((set, get) => ({
   layout: defaultLayout(),
   folderDialog: null,
   helpOpen: false,
+  legalDoc: null,
   refreshTick: 0,
 
   init: async () => {
@@ -303,6 +307,7 @@ export const useStore = create<State>((set, get) => ({
     void window.api.saveLayout(layout)
   },
   setHelp: (helpOpen) => set({ helpOpen, menu: null, itemMenu: null }),
+  openLegal: (legalDoc) => set({ legalDoc, menu: null, itemMenu: null }),
   openFolderDialog: (folderDialog) => set({ folderDialog, itemMenu: null }),
   closeFolderDialog: () => set({ folderDialog: null }),
 

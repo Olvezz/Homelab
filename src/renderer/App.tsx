@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { CertPrompt } from './components/CertPrompt'
 import { Notes } from './components/Notes'
 import { NetworkMap } from './components/NetworkMap'
-import { ConfirmDialog, FolderDialog, GuestMenu, ItemMenu, SearchPalette, ShortcutsDialog } from './components/Dialogs'
+import { ConfirmDialog, FolderDialog, GuestMenu, ItemMenu, LegalDialog, SearchPalette, ShortcutsDialog } from './components/Dialogs'
 import { Settings } from './components/Settings'
 import { SshHostPrompt, SshSecretPrompt } from './components/SshDialogs'
 import { SshView } from './components/SshView'
@@ -23,6 +23,7 @@ export function App(): React.JSX.Element {
   const confirmOpen = useStore((s) => !!s.confirm)
   const folderOpen = useStore((s) => !!s.folderDialog)
   const helpOpen = useStore((s) => s.helpOpen)
+  const legalOpen = useStore((s) => !!s.legalDoc)
   const searchOpen = useStore((s) => s.searchOpen)
   const sshModal = useStore((s) => s.sshHostQueue.length > 0 || !!s.sshSecretPrompt)
   const activeSshId = useStore((s) => s.activeSshId)
@@ -49,7 +50,7 @@ export function App(): React.JSX.Element {
 
   // Los modales y menús quedan tapados por la vista nativa: se oculta mientras estén abiertos
   const certOpen = certQueue.length > 0
-  const overlay = certOpen || menuOpen || confirmOpen || folderOpen || helpOpen || searchOpen || sshModal
+  const overlay = certOpen || menuOpen || confirmOpen || folderOpen || helpOpen || legalOpen || searchOpen || sshModal
   useEffect(() => {
     void window.api.setOverlay(overlay)
   }, [overlay])
@@ -78,6 +79,7 @@ export function App(): React.JSX.Element {
       <ItemMenu />
       <FolderDialog />
       <ShortcutsDialog />
+      <LegalDialog />
       <ConfirmDialog />
       <SearchPalette />
       <SshHostPrompt />
