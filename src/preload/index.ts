@@ -43,6 +43,7 @@ const api: Api = {
   deleteSsh: (id) => ipcRenderer.invoke(IPC.sshDelete, id),
   importPutty: () => ipcRenderer.invoke(IPC.sshImportPutty),
   pickSshKey: () => ipcRenderer.invoke(IPC.sshPickKey),
+  fetchPanelIcon: (siteUrl) => ipcRenderer.invoke(IPC.panelFetchIcon, siteUrl),
   exportConfig: () => ipcRenderer.invoke(IPC.configExport),
   importConfig: () => ipcRenderer.invoke(IPC.configImport),
   testSsh: (input) => ipcRenderer.invoke(IPC.sshTest, input),

@@ -153,6 +153,7 @@ export function ConfirmDialog(): React.JSX.Element | null {
 interface Hit {
   id: string
   icon: string
+  img?: string // icono bajado del sitio oficial (si el panel no tiene logo conocido)
   label: string
   detail: string
   kind: 'panel' | 'guest'
@@ -185,6 +186,7 @@ export function SearchPalette(): React.JSX.Element | null {
       ...listedPanels(panels).map((p) => ({
         id: `p-${p.id}`,
         icon: panelIconKey(p, p.vmid ? guests.find((g) => g.vmid === p.vmid) : undefined),
+        img: panelIconKey(p, p.vmid ? guests.find((g) => g.vmid === p.vmid) : undefined) === 'ui:globe' ? p.iconData : undefined,
         label: p.name,
         detail: `${t('searchPanel')} · ${p.url}`,
         kind: 'panel' as const,
@@ -253,7 +255,7 @@ export function SearchPalette(): React.JSX.Element | null {
             <li key={h.id}>
               <button className={i === index ? 'sel' : ''} onMouseEnter={() => setIndex(i)} onClick={() => choose(h)}>
                 <span className="hit-label">
-                  <Icon k={h.icon} />
+                  {h.img ? <img className="ico ico-img" src={h.img} width={16} height={16} alt="" aria-hidden="true" /> : <Icon k={h.icon} />}
                   {h.label}
                 </span>
                 <span className="detail">{h.detail}</span>

@@ -104,3 +104,12 @@ export function guestIconKey(g: Guest): IconKey {
 export function panelIconKey(p: Panel, guest: Guest | undefined): IconKey {
   return iconForPanel(p, guest, isKnownIcon)
 }
+
+// Icono del panel: logo conocido o elegido a mano; si no hay ninguno, el bajado de su sitio oficial
+export function PanelIcon({ panel, guest, size = 16 }: { panel: Pick<Panel, 'name' | 'url' | 'icon' | 'siteUrl' | 'iconData' | 'id' | 'source'>; guest?: Guest; size?: number }): React.JSX.Element {
+  const key = panelIconKey(panel as Panel, guest)
+  if (key === 'ui:globe' && panel.iconData) {
+    return <img className="ico ico-img" src={panel.iconData} width={size} height={size} alt="" aria-hidden="true" />
+  }
+  return <Icon k={key} size={size} />
+}

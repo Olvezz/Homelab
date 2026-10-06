@@ -10,6 +10,12 @@ export const panelSchema = z.object({
   name: z.string().trim().min(1).max(60),
   url: httpUrlSchema,
   icon: z.string().max(30).optional(),
+  siteUrl: httpUrlSchema.optional(), // sitio oficial: de ahí se baja el icono
+  iconData: z
+    .string()
+    .regex(/^data:image\/(png|x-icon|svg\+xml|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/)
+    .max(120000)
+    .optional(),
   source: z.enum(['manual', 'proxmox-notes', 'proxmox-tag']),
   vmid: z.number().int().positive().optional()
 })

@@ -27,6 +27,7 @@ import {
 } from './ipcSchemas'
 import type { PanelHub } from './panelHub'
 import { buildHostInstaller, DEFAULT_GUEST_SCRIPT, UNINSTALL_COMMAND, validateGuestScript } from './provision'
+import { fetchSiteIcon } from './iconFetch'
 import { probeCertificate } from './pve/client'
 import { describeError, type PveService } from './pve/service'
 import type { CertTrust } from './security/certTrust'
@@ -175,6 +176,7 @@ export function registerIpc({ win, store, views, trust, service, hub, onUiChange
     return r.canceled ? null : (r.filePaths[0] ?? null)
   })
   handle(IPC.sshTest, (raw) => ssh.test(sshConnectionSchema.parse(raw)))
+  handle(IPC.panelFetchIcon, (raw) => fetchSiteIcon(httpUrlSchema.parse(raw)))
   handle(IPC.configExport, async () => {
     const r = await dialog.showSaveDialog(win, {
       title: 'Exportar configuración',

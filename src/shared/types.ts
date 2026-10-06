@@ -36,6 +36,7 @@ export const IPC = {
   sshDelete: 'ssh:delete',
   sshImportPutty: 'ssh:import-putty',
   sshPickKey: 'ssh:pick-key',
+  panelFetchIcon: 'panel:fetch-icon',
   configExport: 'config:export',
   configImport: 'config:import',
   sshOpen: 'ssh:open',
@@ -80,6 +81,8 @@ export interface Panel {
   name: string
   url: string // http(s)://ip:puerto
   icon?: string // opcional: clave de icono (logo de marca o `ui:…`); si falta se asigna sola
+  siteUrl?: string // opcional: sitio oficial del servicio (ayuda a reconocerlo y de él se baja el icono)
+  iconData?: string // icono bajado del sitio oficial (data URI); se usa si no hay un logo conocido
   source: PanelSource
   vmid?: number
   // Solo paneles descubiertos con host fuera de rangos privados
@@ -526,6 +529,7 @@ export interface Api {
   deleteSsh(id: string): Promise<SshConnection[]>
   importPutty(): Promise<{ added: number; connections: SshConnection[] }>
   pickSshKey(): Promise<string | null>
+  fetchPanelIcon(siteUrl: string): Promise<string | null>
   exportConfig(): Promise<{ path: string } | null>
   importConfig(): Promise<{ ok: boolean; error?: string } | null>
   testSsh(input: SshConnectionInput): Promise<SshTestResult>

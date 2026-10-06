@@ -2065,3 +2065,8 @@ ul.blocked {
   font-size: 13px;
   white-space: pre;
 }
+
+.ico-img {
+  object-fit: contain;
+  border-radius: 3px;
+}

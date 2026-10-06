@@ -3,16 +3,19 @@ import type { AdguardConfigInput, AdguardConfigView, Panel, SshAuth, SshConnecti
 import { errMsg, t, type Key } from '../i18n'
 import { useStore } from '../store'
 import { resolveTheme, THEMES } from '../theme'
-import { Icon, ICON_CHOICES, isKnownIcon, panelIconKey } from './Icon'
+import { Icon, ICON_CHOICES, isKnownIcon, PanelIcon } from './Icon'
 
 interface Draft {
   id: string | null // null = panel nuevo
   name: string
   url: string
+  siteUrl: string // sitio oficial (opcional)
+  iconData?: string // icono ya bajado de siteUrl
+  iconSite?: string // siteUrl del que salió iconData
   icon: string // clave de icono o '' = automático
 }
 
-const emptyDraft: Draft = { id: null, name: '', url: '', icon: '' }
+const emptyDraft: Draft = { id: null, name: '', url: '', siteUrl: '', icon: '' }
 
 function validUrl(raw: string): boolean {
   try {
@@ -897,6 +900,8 @@ export function Settings(): React.JSX.Element {
 
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const showToast = useStore((s) => s.showToast)
   const sshEdit = useStore((s) => s.editRequest?.kind === 'ssh')
   useEffect(() => {
     if (sshEdit) setTab('access')
@@ -910,7 +915,7 @@ export function Settings(): React.JSX.Element {
     const p = manual.find((x) => x.id === panelEdit.id)
     useStore.setState({ editRequest: null })
     if (p) {
-      setDraft({ id: p.id, name: p.name, url: p.url, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+      setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
       setError('')
     }
   }, [panelEdit, manual])
@@ -922,17 +927,30 @@ export function Settings(): React.JSX.Element {
     if (!name) return setError(t('errName'))
     if (!validUrl(url)) return setError(t('errUrl'))
 
+    const siteUrl = draft.siteUrl.trim()
+    if (siteUrl && !validUrl(siteUrl)) return setError(t('errSiteUrl'))
+
     const icon = draft.icon || undefined
-    const next: Panel[] =
-      draft.id === null
-        ? [...manual, { id: `manual-${crypto.randomUUID()}`, name, url, icon, source: 'manual' }]
-        : manual.map((p) => (p.id === draft.id ? { ...p, name, url, icon } : p))
+    setBusy(true)
     try {
+      // El icono se baja del sitio oficial al guardar (o al cambiar esa dirección); si falla, el panel se guarda igual
+      let iconData = siteUrl ? draft.iconData : undefined
+      if (siteUrl && (siteUrl !== draft.iconSite || !iconData)) {
+        iconData = (await window.api.fetchPanelIcon(siteUrl).catch(() => null)) ?? undefined
+        if (!iconData) showToast('info', t('iconNotFound'))
+      }
+      const extra = { siteUrl: siteUrl || undefined, iconData }
+      const next: Panel[] =
+        draft.id === null
+          ? [...manual, { id: `manual-${crypto.randomUUID()}`, name, url, icon, ...extra, source: 'manual' }]
+          : manual.map((p) => (p.id === draft.id ? { ...p, name, url, icon, ...extra } : p))
       await saveManualPanels(next)
       setDraft(emptyDraft)
       setError('')
     } catch (err) {
       setError(errMsg(err))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -1016,14 +1034,14 @@ export function Settings(): React.JSX.Element {
             {manual.map((p) => (
               <li key={p.id}>
                 <span className="panel-icon">
-                  <Icon k={panelIconKey(p, undefined)} />
+                  <PanelIcon panel={p} />
                 </span>
                 <span className="settings-name">{p.name}</span>
                 <span className="settings-url">{p.url}</span>
                 <button
                   className="btn small"
                   onClick={() => {
-                    setDraft({ id: p.id, name: p.name, url: p.url, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
+                    setDraft({ id: p.id, name: p.name, url: p.url, siteUrl: p.siteUrl ?? '', iconData: p.iconData, iconSite: p.siteUrl, icon: isKnownIcon(p.icon ?? '') ? (p.icon ?? '') : '' })
                     setError('')
                   }}
                 >
@@ -1047,10 +1065,20 @@ export function Settings(): React.JSX.Element {
               <input value={draft.url} maxLength={2048} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
             </label>
             <label className="field">
+              <span>{t('siteUrl')}</span>
+              <input
+                value={draft.siteUrl}
+                maxLength={2048}
+                placeholder="https://…"
+                onChange={(e) => setDraft({ ...draft, siteUrl: e.target.value })}
+              />
+              <small className="hint">{t('siteUrlHint')}</small>
+            </label>
+            <label className="field">
               <span>{t('icon')}</span>
               <div className="icon-pick">
-                <Icon
-                  k={panelIconKey({ id: 'x', name: draft.name, url: draft.url || 'http://x', icon: draft.icon || undefined, source: 'manual' }, undefined)}
+                <PanelIcon
+                  panel={{ id: 'x', name: draft.name, url: draft.url || 'http://x', siteUrl: draft.siteUrl.trim() || undefined, iconData: draft.iconData, icon: draft.icon || undefined, source: 'manual' }}
                   size={20}
                 />
                 <select value={draft.icon} onChange={(e) => setDraft({ ...draft, icon: e.target.value })}>
@@ -1077,8 +1105,8 @@ export function Settings(): React.JSX.Element {
                   {t('cancel')}
                 </button>
               )}
-              <button type="submit" className="btn primary">
-                {t('save')}
+              <button type="submit" className="btn primary" disabled={busy}>
+                {busy ? t('iconSearching') : t('save')}
               </button>
             </div>
           </form>

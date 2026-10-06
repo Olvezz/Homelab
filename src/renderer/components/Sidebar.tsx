@@ -3,7 +3,7 @@ import type { Guest, Panel, PanelStatus, PveStatus } from '../../shared/types'
 import { t, type Key } from '../i18n'
 import { effectiveSidebarWidth, listedPanels, resolvePanel, useStore } from '../store'
 import { fmtAgo } from '../homeFormat'
-import { guestIconKey, Icon, panelIconKey } from './Icon'
+import { guestIconKey, Icon, PanelIcon } from './Icon'
 
 const STATUS_KEY: Record<PveStatus, Key> = {
   unconfigured: 'statusUnconfigured',
@@ -185,7 +185,7 @@ function PanelButton({
     >
       <button className="panel-item" onClick={() => selectPanel(panel.id)} title={`${panel.name} — ${panel.url}\n${panelTip(status)}`}>
         <span className="panel-icon">
-          <Icon k={panelIconKey(panel, guest)} />
+          <PanelIcon panel={panel} guest={guest} />
           {collapsed && <PanelState status={status} corner />}
         </span>
         {!collapsed && <span className="panel-name">{panel.name}</span>}

@@ -190,6 +190,7 @@ export interface PanelIconInfo {
   name: string
   url: string
   icon?: string
+  siteUrl?: string
 }
 
 // Icono explícito (si es válido) -> nombre/URL del panel -> puerto -> el del guest -> globo
@@ -218,6 +219,15 @@ export function iconForPanel(
   if (!/^[\d.:[\]]+$/.test(host)) {
     const byHost = firstMatch(`${host} ${path}`)
     if (byHost) return byHost
+  }
+  // El sitio oficial (nginxproxymanager.com, adguard.com…) delata el servicio aunque el nombre sea una sigla
+  if (p.siteUrl) {
+    try {
+      const bySite = firstMatch(new URL(p.siteUrl).hostname.replace(/\./g, ' '))
+      if (bySite) return bySite
+    } catch {
+      // siteUrl ilegible: se ignora
+    }
   }
   if (port && PORT_HINTS[port]) return PORT_HINTS[port]
   if (guest) return iconForGuest(guest)
