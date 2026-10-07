@@ -8,10 +8,6 @@ Correr sobre HomeLab Desktop y sobre su página de descarga o venta (si existe).
 - [ ] Si se citan clientes o casos reales, hay autorización de esa persona o negocio.
 - [ ] No se afirma compatibilidad, certificación ni respaldo de Proxmox, Portainer u otras marcas que la aplicación muestra: se indica que son marcas de sus titulares y que no hay afiliación.
 
-## Datos del negocio
-- [ ] Nombre legal, RNC, dirección y contacto visibles (Ajustes → Legal y página de descarga) y **verificados** contra el registro real.
-- [ ] Los mismos datos coinciden en Términos, Privacidad, Cookies y Rembolso, sin inconsistencias.
-
 ## Datos y consentimiento
 - [ ] La aplicación no pide ningún dato que no necesite (minimización). *(Hoy no hay cuentas ni formularios que envíen datos.)*
 - [ ] Si se añade algún envío de datos a un servidor (licencias, telemetría, soporte), hay consentimiento explícito antes de enviar y está declarado en la Política de Privacidad.
@@ -29,6 +25,6 @@ Correr sobre HomeLab Desktop y sobre su página de descarga o venta (si existe).
 
 ## Registro
 
-| Producto | Terceros detectados | Analítica | Reseñas revisadas | Datos negocio verificados |
-|---|---|---|---|---|
-| HomeLab Desktop | GitHub (actualizaciones), sitios oficiales indicados por el usuario (iconos) | Ninguna | No hay reseñas | Pendiente: completar razón social y RNC |
+| Producto | Terceros detectados | Analítica | Reseñas revisadas |
+|---|---|---|---|
+| HomeLab Desktop | GitHub (actualizaciones), sitios oficiales indicados por el usuario (iconos) | Ninguna | No hay reseñas |

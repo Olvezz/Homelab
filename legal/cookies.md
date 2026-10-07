@@ -26,7 +26,3 @@ La aplicación **no** instala cookies analíticas, de marketing ni de terceros p
 ## 4. Cómo controlar las cookies
 
 Cada panel guarda sus cookies en un perfil aislado dentro de tu equipo. Puedes borrarlas desde el menú del panel con "Cerrar sesión del sitio…", o eliminando la carpeta `%APPDATA%\homelab-desktop`.
-
-## 5. Contacto
-
-[COMPLETAR: correo de contacto]

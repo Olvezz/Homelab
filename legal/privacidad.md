@@ -6,11 +6,7 @@ Esta Política de Privacidad describe cómo **HomeLab Desktop** ("nosotros", "la
 
 ## 1. Responsable del tratamiento de datos
 
-- **Razón social / nombre:** [COMPLETAR]
-- **RNC:** [COMPLETAR]
-- **Dirección:** [COMPLETAR]
-- **Correo de contacto:** [COMPLETAR]
-- **Teléfono:** [COMPLETAR]
+El responsable es el titular de la aplicación. Como la información permanece en tu equipo, el titular **no recibe, no almacena ni trata** tus datos personales en servidores propios.
 
 ## 2. En resumen
 
@@ -58,7 +54,7 @@ Tienes derecho a:
 - **Rectificación y actualización**: editar paneles, conexiones y notas desde la propia aplicación.
 - **Supresión**: eliminar elementos desde la aplicación o borrar la carpeta `%APPDATA%\homelab-desktop`.
 
-Como no almacenamos tus datos, puedes ejercer estos derechos directamente. Para cualquier consulta, escribe a [COMPLETAR: correo de contacto].
+Como no almacenamos tus datos, puedes ejercer estos derechos directamente.
 
 ## 8. Archivo de exportación
 
@@ -74,12 +70,8 @@ Los datos permanecen en tu equipo hasta que los elimines. **Desinstalar la aplic
 
 ## 11. Menores
 
-La aplicación no está dirigida a menores de [COMPLETAR: edad mínima] años.
+La aplicación no está dirigida a menores de 18 años.
 
 ## 12. Cambios a esta política
 
 Podemos actualizar esta política. Los cambios importantes se indicarán en la aplicación o en la página de descarga, con la fecha de la última actualización.
-
-## 13. Contacto
-
-[COMPLETAR: correo/teléfono de contacto para temas de privacidad]

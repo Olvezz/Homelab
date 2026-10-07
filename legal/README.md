@@ -13,7 +13,7 @@ Adaptación de las plantillas de `C:\Sistemas\_Legal-Templates` a una **aplicaci
 | `cookies.md` | Política de cookies (la app no usa analítica; los paneles web guardan sus sesiones) |
 | `rembolso.md` | Declara que hoy no hay pagos; se completa antes de vender |
 | `accesibilidad-checklist.md` | Checklist WCAG 2.1 AA para la interfaz |
-| `integridad-contenido-checklist.md` | Reseñas, afirmaciones, datos del negocio, analítica y terceros |
+| `integridad-contenido-checklist.md` | Reseñas, afirmaciones, analítica y terceros |
 | `../LICENSE` | Licencia del software (todos los derechos reservados) |
 | `../THIRD_PARTY_NOTICES.md` | Licencias de los componentes de terceros (se genera con `npm run licenses`) |
 
@@ -21,21 +21,9 @@ Estos documentos también se ven **dentro de la aplicación** (Ajustes → Gener
 
 No se incluye `cookie-consent-snippet.html`: es para sitios web, y esta aplicación no usa cookies opcionales ni analítica, así que no necesita banner de consentimiento. Si algún día se añade analítica o telemetría, habrá que añadir consentimiento y actualizar `privacidad.md` y `cookies.md`.
 
-## Datos que faltan por completar
-
-Cada `[COMPLETAR: …]` debe sustituirse por el dato real **antes de comercializar**:
-
-- Razón social o nombre del titular y **RNC**.
-- Dirección, correo y teléfono de contacto (privacidad, términos, cookies, rembolso).
-- Edad mínima de uso.
-- Ciudad o provincia de los tribunales competentes.
-- Cláusulas de responsabilidad revisadas por un abogado.
-- Condiciones comerciales y política de rembolso, si se vende.
-
-Para localizarlos: `grep -rn "COMPLETAR" legal`.
-
 ## Cuando cambie algo
 
 - Si la aplicación empieza a enviar datos a algún servidor (telemetría, cuentas, licencias, pagos): actualizar `privacidad.md`, `cookies.md` y `terminos.md`, y pedir consentimiento.
+- Si se empieza a vender, completar `rembolso.md` y las condiciones comerciales de `terminos.md` antes del primer cobro.
 - Si cambian las dependencias: `npm run licenses` para regenerar `THIRD_PARTY_NOTICES.md`.
 - Cambiar la fecha de "Última actualización" en cada documento modificado.

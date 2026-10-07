@@ -2,7 +2,7 @@
 
 **Última actualización:** 6 de octubre de 2026
 
-Al instalar o usar **HomeLab Desktop** ("el Servicio"), operado por **[COMPLETAR: razón social o nombre del titular]** ("nosotros"), aceptas estos Términos y Condiciones. Si no estás de acuerdo, no instales ni uses el Servicio.
+Al instalar o usar **HomeLab Desktop** ("el Servicio") aceptas estos Términos y Condiciones. "Nosotros" se refiere al titular de los derechos del Servicio. Si no estás de acuerdo, no instales ni uses el Servicio.
 
 ## 1. Descripción del servicio
 
@@ -13,7 +13,7 @@ La aplicación funciona **íntegramente en tu equipo**: no hay cuenta de usuario
 ## 2. Licencia de uso, elegibilidad y responsabilidad sobre tu equipo
 
 - Te otorgamos una licencia **personal, no exclusiva, intransferible y revocable** para instalar y usar el Servicio en tus equipos.
-- Debes tener [COMPLETAR: edad mínima, ej. 18 años] para usar el Servicio, o contar con autorización de un tutor.
+- Debes tener al menos 18 años para usar el Servicio, o contar con autorización de un tutor.
 - Eres responsable de la seguridad de tu equipo, de tus credenciales (tokens de API, contraseñas, claves SSH) y de las copias de seguridad de tu configuración (la aplicación permite exportarla desde Ajustes).
 - Debes usar el Servicio **solo con infraestructura que sea tuya o que estés autorizado a administrar**.
 
@@ -30,11 +30,11 @@ No debes usar el Servicio para:
 
 ## 4. Pagos y facturación (si aplica)
 
-Actualmente el Servicio **no tiene costo y no procesa pagos**. Si en el futuro se comercializa, los precios, la moneda, la forma de pago y la frecuencia de cobro se informarán antes de la compra y se regirán además por la Política de Rembolso. [COMPLETAR: condiciones comerciales cuando existan]
+Actualmente el Servicio **no tiene costo y no procesa pagos**. Si en el futuro se comercializa, los precios, la moneda, la forma de pago y la frecuencia de cobro se informarán antes de la compra y se regirán además por la Política de Rembolso.
 
 ## 5. Propiedad intelectual
 
-El Servicio, su código, marca y diseño son propiedad de **[COMPLETAR: razón social o nombre del titular]** y están protegidos por la **Ley 65-00 sobre Derecho de Autor** y la **Ley 20-00 sobre Propiedad Industrial** de la República Dominicana. No puedes copiar, reproducir o distribuir el Servicio sin autorización.
+El Servicio, su código, marca y diseño son propiedad de su titular y están protegidos por la **Ley 65-00 sobre Derecho de Autor** y la **Ley 20-00 sobre Propiedad Industrial** de la República Dominicana. No puedes copiar, reproducir o distribuir el Servicio sin autorización.
 
 - **Componentes de terceros:** el Servicio incluye software de código abierto que se rige por sus propias licencias. Su lista y textos están en "Licencias de terceros" (dentro de la aplicación y en el archivo `THIRD_PARTY_NOTICES.md`).
 - **Marcas y logotipos:** los nombres y logotipos de servicios de terceros que la aplicación muestra para identificar tus paneles (por ejemplo Proxmox, Portainer, Jellyfin) pertenecen a sus respectivos titulares. No existe afiliación, patrocinio ni respaldo de esos titulares.
@@ -53,7 +53,7 @@ El Servicio muestra y se conecta a sistemas que no controlamos (tus servidores, 
 
 ## 9. Limitación de responsabilidad
 
-El Servicio se ofrece "tal cual" y "según disponibilidad". En la medida permitida por la ley, no somos responsables por daños indirectos, pérdida de datos, interrupciones de servicios o cualquier efecto de acciones que realices desde la aplicación sobre tus sistemas (encender, apagar o reiniciar máquinas virtuales, ejecutar comandos o scripts por SSH, aprovisionar equipos, entre otras). [COMPLETAR: cláusulas específicas — revisar con abogado antes de comercializar]
+El Servicio se ofrece "tal cual" y "según disponibilidad". En la medida permitida por la ley, no somos responsables por daños indirectos, pérdida de datos, interrupciones de servicios o cualquier efecto de acciones que realices desde la aplicación sobre tus sistemas (encender, apagar o reiniciar máquinas virtuales, ejecutar comandos o scripts por SSH, aprovisionar equipos, entre otras).
 
 ## 10. Terminación
 
@@ -61,8 +61,4 @@ Puedes dejar de usar el Servicio en cualquier momento desinstalándolo. Podemos 
 
 ## 11. Ley aplicable
 
-Estos Términos se rigen por las leyes de la República Dominicana. Cualquier disputa se resolverá ante los tribunales competentes de [COMPLETAR: ciudad/provincia].
-
-## 12. Contacto
-
-[COMPLETAR: correo/teléfono]
+Estos Términos se rigen por las leyes de la República Dominicana. Cualquier disputa se resolverá ante los tribunales competentes de la República Dominicana.

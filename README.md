@@ -179,4 +179,4 @@ Publicar a mano (sin Actions): con un token con permiso `repo` en `GH_TOKEN`, `n
 
 ## Legal
 
-El marco legal (términos, privacidad, cookies, rembolso, checklists y licencias de terceros) está en `legal/`, `LICENSE` y `THIRD_PARTY_NOTICES.md`, y se ve dentro de la aplicación en Ajustes → General → Legal. Los datos de la empresa (`[COMPLETAR: …]`) deben rellenarse antes de comercializar: ver `legal/README.md`.
+El marco legal (términos, privacidad, cookies, rembolso, checklists y licencias de terceros) está en `legal/`, `LICENSE` y `THIRD_PARTY_NOTICES.md`, y se ve dentro de la aplicación en Ajustes → General → Legal. Ver `legal/README.md` para lo que conviene revisar antes de comercializar.

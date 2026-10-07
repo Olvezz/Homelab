@@ -474,7 +474,7 @@ const es = {
   folderMax: 'Máximo 50 carpetas',
   pinned: 'Fijados',
   legalTitle: 'Legal',
-  legalHint: 'Términos, privacidad, cookies, rembolso y licencias de los componentes de terceros. HomeLab Desktop © 2026 Olvezz, todos los derechos reservados.',
+  legalHint: 'Términos, privacidad, cookies, rembolso y licencias de los componentes de terceros. HomeLab Desktop © 2026, todos los derechos reservados.',
   shortcutsTitle: 'Atajos de teclado',
   shortcutsHint: 'Con un terminal SSH delante, los atajos de la app se dejan pasar al terminal (salvo F11, Ctrl+V y Ctrl+Shift+C).',
   shortcutsOpen: 'Ver atajos de teclado (F1)',

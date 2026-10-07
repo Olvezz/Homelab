@@ -2,7 +2,7 @@ appId: local.olvezz.homelab-desktop
 productName: HomeLab Desktop
 directories:
   buildResources: resources
-copyright: Copyright © 2026 Olvezz. Todos los derechos reservados.
+copyright: Copyright © 2026. Todos los derechos reservados.
 files:
   - out/**/*
   - package.json
