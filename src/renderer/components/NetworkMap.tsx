@@ -209,6 +209,35 @@ function ResourceCard({ host, serves }: { host: Host; serves?: number }): React.
   )
 }
 
+interface Load {
+  cpu: number // fracción 0-1
+  mem: number
+  memText: string
+  count: number // máquinas encendidas que suman
+}
+
+// Consumo de un elemento: el de su nodo o máquina, o la suma de las máquinas encendidas que contiene (carpeta, tag, red)
+function loadOf(engine: MapEngine, n: SimNode, guests: Guest[], nodes: NodeInfo[]): Load | null {
+  if (n.type === 'node') {
+    const info = nodes.find((x) => `n:${x.name}` === n.id)
+    if (!info?.online) return null
+    return { cpu: info.cpu, mem: info.maxmem ? info.mem / info.maxmem : 0, memText: `${fmtBytes(info.mem)} / ${fmtBytes(info.maxmem)}`, count: 1 }
+  }
+  const found = [n, ...engine.descendants(n)]
+    .map((x) => (x.guestKey ? guests.find((g) => g.key === x.guestKey) : undefined))
+    .filter((g): g is Guest => !!g && g.status === 'running')
+  if (found.length === 0) return null
+  const cores = found.reduce((s, g) => s + g.maxcpu, 0)
+  const mem = found.reduce((s, g) => s + g.mem, 0)
+  const maxmem = found.reduce((s, g) => s + g.maxmem, 0)
+  return {
+    cpu: cores ? found.reduce((s, g) => s + g.cpu * g.maxcpu, 0) / cores : 0,
+    mem: maxmem ? mem / maxmem : 0,
+    memText: `${fmtBytes(mem)} / ${fmtBytes(maxmem)}`,
+    count: found.length
+  }
+}
+
 const MAX_CARDS = 8
 
 // Lo que se está consumiendo dentro del nodo seleccionado: máquinas que alojan sus servicios, y estado de cada servicio
@@ -504,20 +533,32 @@ export function NetworkMap(): React.JSX.Element {
               {t('mapContains')} ({others.length})
             </h3>
             <div className="kids">
-              {others.map((c) => (
-                <button
-                  key={c.id}
-                  className="kid"
-                  onClick={() => {
-                    engine.toggle(n, true)
-                    engine.select(c)
-                  }}
-                >
-                  <span className="dot" style={{ background: NODE_COLORS[c.type] }} />
-                  <span className="kid-name">{c.label}</span>
-                  <small>{c.children.length ? `${c.children.length} ›` : ''}</small>
-                </button>
-              ))}
+              {others.map((c) => {
+                const load = loadOf(engine, c, snapshot.guests, snapshot.nodes)
+                return (
+                  <button
+                    key={c.id}
+                    className="kid"
+                    onClick={() => {
+                      engine.toggle(n, true)
+                      engine.select(c)
+                    }}
+                  >
+                    <span className="kid-top">
+                      <span className="dot" style={{ background: NODE_COLORS[c.type] }} />
+                      <span className="kid-name">{c.label}</span>
+                      <small>{c.deviceKind ? t(KIND_KEY[c.deviceKind]) : t(TYPE_KEY[c.type])}</small>
+                      <small>{c.children.length ? `${c.children.length} ›` : ''}</small>
+                    </span>
+                    {load && (
+                      <>
+                        <Meter label={t('mapCpu')} fraction={load.cpu} text={`${Math.round(load.cpu * 100)} %`} />
+                        <Meter label={t('mapRam')} fraction={load.mem} text={load.memText} />
+                      </>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </>
         )}
