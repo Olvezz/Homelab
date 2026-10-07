@@ -137,6 +137,11 @@ function hostOf(engine: MapEngine, n: SimNode, guests: Guest[], nodes: NodeInfo[
       if (info) return { kind: 'node', info }
     }
   }
+  // Un servicio dentro de una carpeta del usuario no cuelga de su máquina: se busca por su IP
+  if (n.ip) {
+    const g = guests.find((x) => x.ips.includes(n.ip!))
+    if (g) return { kind: 'guest', guest: g }
+  }
   return null
 }
 
