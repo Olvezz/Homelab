@@ -417,7 +417,7 @@ const es = {
   mapFit: 'Reajustar',
   mapHint: 'Rueda: zoom · Arrastra el fondo: mover · Arrastra un nodo: se queda donde lo sueltes · Doble clic: abrir/cerrar',
   mapGroupPools: 'Pools de Proxmox',
-  mapGroupPoolsHint: 'Agrupa las máquinas de un nodo por su pool de Proxmox (las que comparten uno).',
+  mapGroupPoolsHint: 'Agrupa las máquinas de un nodo por su pool de Proxmox, aunque el pool tenga una sola.',
   mapGroupFolders: 'Mis carpetas',
   mapGroupFoldersHint: 'Los paneles que metiste en una carpeta de la barra lateral cuelgan de ella en el mapa.',
   mapEmpty: 'Todavía no hay nada que dibujar: conecta Proxmox o añade paneles desde Ajustes.',

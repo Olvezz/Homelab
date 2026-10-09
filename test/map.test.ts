@@ -168,7 +168,7 @@ describe('agrupación por pools y carpetas', () => {
     const input = base()
     input.guests[0].pool = 'red' // adguard
     input.guests[1].pool = 'red' // tailscale
-    input.guests[2].pool = 'docker' // solo uno con este pool: no se agrupa
+    input.guests[2].pool = 'docker' // un pool con una sola máquina también forma carpeta
     return input
   }
   it('sin la opción, las máquinas cuelgan del nodo', () => {
@@ -179,7 +179,8 @@ describe('agrupación por pools y carpetas', () => {
     expect(by(n, 'pool:proxmox:red')).toMatchObject({ type: 'folder', label: 'red', parent: 'n:proxmox' })
     expect(by(n, 'g:proxmox/100').parent).toBe('pool:proxmox:red')
     expect(by(n, 'g:proxmox/101').parent).toBe('pool:proxmox:red')
-    expect(by(n, 'g:proxmox/102').parent).toBe('n:proxmox')
+    expect(by(n, 'g:proxmox/102').parent).toBe('pool:proxmox:docker')
+    expect(by(n, 'g:proxmox/103').parent).toBe('n:proxmox') // sin pool: cuelga del nodo
   })
   it('los servicios siguen colgando de su máquina aunque esta esté en un grupo', () => {
     const n = buildMap({ ...tagged(), groupByPools: true })

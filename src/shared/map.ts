@@ -173,9 +173,9 @@ export function buildMap(input: MapInput): MapNode[] {
     let parent = have.has(`n:${g.node}`) ? `n:${g.node}` : ensureNet(primary.key, primary.label)
     const pool = input.groupByPools ? poolOf(g) : undefined
     const count = pool ? (poolCount.get(`${g.node}:${pool}`) ?? 0) : 0
-    if (pool && count >= 2) {
+    if (pool) {
       const id = `pool:${g.node}:${pool}`
-      if (!have.has(id)) add({ id, type: 'folder', label: pool, sub: `${count} máquinas`, status: 'unknown', parent, poolGroup: true, color: tagColor(pool) })
+      if (!have.has(id)) add({ id, type: 'folder', label: pool, sub: count === 1 ? '1 máquina' : `${count} máquinas`, status: 'unknown', parent, poolGroup: true, color: tagColor(pool) })
       parent = id
     }
     const n = add({
