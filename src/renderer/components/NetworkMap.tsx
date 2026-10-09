@@ -35,7 +35,7 @@ const VIEW_KEY: Record<ViewMode, { label: Key; hint: Key }> = {
 }
 
 interface Grouping {
-  tags: boolean
+  pools: boolean
   folders: boolean
 }
 const GROUP_KEY = 'homelab.map.grouping'
@@ -44,9 +44,9 @@ const MODE_KEY = 'homelab.map.view'
 function loadGrouping(): Grouping {
   try {
     const raw = JSON.parse(localStorage.getItem(GROUP_KEY) ?? '')
-    return { tags: raw.tags !== false, folders: raw.folders !== false }
+    return { pools: raw.pools !== false, folders: raw.folders !== false }
   } catch {
-    return { tags: true, folders: true }
+    return { pools: true, folders: true }
   }
 }
 
@@ -60,13 +60,13 @@ function loadMode(): ViewMode {
 }
 
 // Entrada del mapa a partir del estado de la app (se recalcula solo cuando cambia algo relevante)
-function useMapInput(group: Grouping = { tags: false, folders: false }): ReturnType<typeof mapInputOf> {
+function useMapInput(group: Grouping = { pools: false, folders: false }): ReturnType<typeof mapInputOf> {
   const pve = useStore((s) => s.pve)
   const snapshot = useStore((s) => s.snapshot)
   const panels = useStore((s) => s.panels)
   const layout = useStore((s) => s.layout)
   const ui = useStore((s) => s.ui)
-  return useMemo(() => mapInputOf({ pve, snapshot, panels, layout, ui }, group), [pve, snapshot, panels, layout, ui, group.tags, group.folders])
+  return useMemo(() => mapInputOf({ pve, snapshot, panels, layout, ui }, group), [pve, snapshot, panels, layout, ui, group.pools, group.folders])
 }
 
 // Selector «Conectado a»: red, nodo, máquina, dispositivo o carpeta (se usa al crear un panel y en el panel lateral del mapa)
@@ -221,7 +221,7 @@ interface Load {
   count: number // máquinas encendidas que suman
 }
 
-// Consumo de un elemento: el de su nodo o máquina, o la suma de las máquinas encendidas que contiene (carpeta, tag, red)
+// Consumo de un elemento: el de su nodo o máquina, o la suma de las máquinas encendidas que contiene (carpeta, pool, red)
 function loadOf(engine: MapEngine, n: SimNode, guests: Guest[], nodes: NodeInfo[]): Load | null {
   if (n.type === 'node') {
     const info = nodes.find((x) => `n:${x.name}` === n.id)
@@ -257,7 +257,7 @@ function Usage({ engine, n, guests, nodes }: { engine: MapEngine; n: SimNode; gu
     if (cur) cur.serves += serves
     else hosts.set(key, { host: h, serves })
   }
-  // la propia máquina o nodo seleccionados, y las máquinas que contiene (tag, nodo)
+  // la propia máquina o nodo seleccionados, y las máquinas que contiene (pool, nodo)
   for (const x of all) {
     if (x.guestKey) {
       const g = guests.find((y) => y.key === x.guestKey)
@@ -594,9 +594,9 @@ export function NetworkMap(): React.JSX.Element {
             </button>
           ))}
         </div>
-        <label className="map-check" title={t('mapGroupTagsHint')}>
-          <input type="checkbox" checked={group.tags} onChange={(e) => changeGroup({ ...group, tags: e.target.checked })} />
-          {t('mapGroupTags')}
+        <label className="map-check" title={t('mapGroupPoolsHint')}>
+          <input type="checkbox" checked={group.pools} onChange={(e) => changeGroup({ ...group, pools: e.target.checked })} />
+          {t('mapGroupPools')}
         </label>
         <label className="map-check" title={t('mapGroupFoldersHint')}>
           <input type="checkbox" checked={group.folders} onChange={(e) => changeGroup({ ...group, folders: e.target.checked })} />

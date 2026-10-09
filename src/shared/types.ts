@@ -141,6 +141,7 @@ export interface Guest {
   maxmem: number
   uptime: number
   tags: string[]
+  pool?: string // pool de Proxmox al que pertenece
   description: string
   osType?: string // `ostype` de la config de Proxmox (ubuntu, debian, l26, win11…)
   osId?: string // sistema que informa el qemu-guest-agent (ubuntu, debian, mswindows…)

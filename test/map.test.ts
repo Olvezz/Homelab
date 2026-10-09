@@ -163,27 +163,26 @@ describe('linkTargets', () => {
   })
 })
 
-describe('agrupación por tags y carpetas', () => {
+describe('agrupación por pools y carpetas', () => {
   const tagged = (): MapInput => {
     const input = base()
-    input.guests[0].tags = ['red', 'web-8080'] // adguard
-    input.guests[1].tags = ['red'] // tailscale
-    input.guests[2].tags = ['docker'] // solo uno con este tag: no se agrupa
+    input.guests[0].pool = 'red' // adguard
+    input.guests[1].pool = 'red' // tailscale
+    input.guests[2].pool = 'docker' // solo uno con este pool: no se agrupa
     return input
   }
   it('sin la opción, las máquinas cuelgan del nodo', () => {
     expect(by(buildMap(tagged()), 'g:proxmox/100').parent).toBe('n:proxmox')
   })
-  it('con tags, las máquinas que comparten uno se agrupan bajo su nodo (ignorando web-<puerto>)', () => {
-    const n = buildMap({ ...tagged(), groupByTags: true })
-    expect(by(n, 'tag:proxmox:red')).toMatchObject({ type: 'folder', label: 'red', parent: 'n:proxmox' })
-    expect(by(n, 'g:proxmox/100').parent).toBe('tag:proxmox:red')
-    expect(by(n, 'g:proxmox/101').parent).toBe('tag:proxmox:red')
+  it('con pools, las máquinas que comparten uno se agrupan bajo su nodo', () => {
+    const n = buildMap({ ...tagged(), groupByPools: true })
+    expect(by(n, 'pool:proxmox:red')).toMatchObject({ type: 'folder', label: 'red', parent: 'n:proxmox' })
+    expect(by(n, 'g:proxmox/100').parent).toBe('pool:proxmox:red')
+    expect(by(n, 'g:proxmox/101').parent).toBe('pool:proxmox:red')
     expect(by(n, 'g:proxmox/102').parent).toBe('n:proxmox')
-    expect(n.find((x) => x.id === 'tag:proxmox:web-8080')).toBeUndefined()
   })
   it('los servicios siguen colgando de su máquina aunque esta esté en un grupo', () => {
-    const n = buildMap({ ...tagged(), groupByTags: true })
+    const n = buildMap({ ...tagged(), groupByPools: true })
     expect(by(n, 'p:adg').parent).toBe('g:proxmox/100')
   })
   it('con carpetas, el panel de una carpeta del usuario cuelga de ella', () => {
@@ -203,17 +202,17 @@ describe('agrupación por tags y carpetas', () => {
   })
 })
 
-describe('colores de carpetas y tags', () => {
-  it('la carpeta del usuario lleva su color y el grupo de tag un color estable de la paleta', () => {
-    const input = { ...base(), folders: [{ id: 'mm', name: 'Multimedia', color: '#e5484d' }], groupByFolders: true, groupByTags: true }
+describe('colores de carpetas y pools', () => {
+  it('la carpeta del usuario lleva su color y el grupo de pool un color estable de la paleta', () => {
+    const input = { ...base(), folders: [{ id: 'mm', name: 'Multimedia', color: '#e5484d' }], groupByFolders: true, groupByPools: true }
     input.panels.find((p) => p.id === 'jf')!.folder = 'mm'
-    input.guests[0].tags = ['red']
-    input.guests[1].tags = ['red']
+    input.guests[0].pool = 'red'
+    input.guests[1].pool = 'red'
     const n = buildMap(input)
     expect(by(n, 'f:mm').color).toBe('#e5484d')
-    const tag = by(n, 'tag:proxmox:red').color
+    const tag = by(n, 'pool:proxmox:red').color
     expect(tag).toMatch(/^#[0-9a-f]{6}$/)
-    expect(buildMap(input).find((x) => x.id === 'tag:proxmox:red')!.color).toBe(tag)
+    expect(buildMap(input).find((x) => x.id === 'pool:proxmox:red')!.color).toBe(tag)
     expect(tagColor('Red')).toBe(tagColor('red')) // no distingue mayúsculas
   })
 })

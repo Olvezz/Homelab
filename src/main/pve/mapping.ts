@@ -18,6 +18,7 @@ const resourceSchema = z.object({
   maxmem: num,
   uptime: num,
   tags: z.string().optional(),
+  pool: z.string().max(200).optional(),
   netin: num,
   netout: num,
   diskread: num,
@@ -39,6 +40,7 @@ export interface ParsedGuest {
   maxmem: number
   uptime: number
   tags: string[]
+  pool?: string
   netin: number
   netout: number
   diskread: number
@@ -94,6 +96,7 @@ export function parseResources(raw: unknown): { guests: ParsedGuest[]; nodes: Pa
         maxmem: v.maxmem,
         uptime: v.uptime,
         tags: parseTags(v.tags),
+        pool: v.pool || undefined,
         netin: v.netin,
         netout: v.netout,
         diskread: v.diskread,

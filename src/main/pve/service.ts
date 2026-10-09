@@ -502,6 +502,7 @@ export class PveService {
         maxdisk: g.maxdisk,
         ...(this.rates.get(key) ?? { netInRate: 0, netOutRate: 0, diskReadRate: 0, diskWriteRate: 0 }),
         tags,
+        pool: g.pool,
         description,
         osType: d?.osType,
         osId: d?.osId,

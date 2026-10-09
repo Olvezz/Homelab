@@ -24,16 +24,16 @@ export interface MapNode {
   vmid?: number
   deviceKind?: MapKind
   category?: boolean // carpeta creada sola para agrupar servicios (empieza cerrada)
-  tagGroup?: boolean // carpeta creada sola por un tag de Proxmox
-  color?: string // color propio (carpeta del usuario o tag); si falta vale el del tipo
+  poolGroup?: boolean // carpeta creada sola por un pool de Proxmox
+  color?: string // color propio (carpeta del usuario o pool); si falta vale el del tipo
 }
 
 export interface MapInput {
   pve: { host: string; port: number } | null
   nodes: { name: string; online: boolean }[]
-  guests: { key: string; vmid: number; name: string; node: string; type: 'qemu' | 'lxc'; status: string; ips: string[]; template: boolean; tags?: string[] }[]
+  guests: { key: string; vmid: number; name: string; node: string; type: 'qemu' | 'lxc'; status: string; ips: string[]; template: boolean; pool?: string }[]
   panels: { id: string; name: string; url: string; vmid?: number; mapKind?: MapKind; mapLink?: string; folder?: string }[]
-  groupByTags?: boolean // agrupa las máquinas de un nodo por su tag de Proxmox
+  groupByPools?: boolean // agrupa las máquinas de un nodo por su pool de Proxmox
   groupByFolders?: boolean // los paneles que están en una carpeta del usuario cuelgan de ella
   folders: { id: string; name: string; color?: string }[] // carpetas del usuario (con su color): destinos de enlace
   showTemplates?: boolean
@@ -92,16 +92,11 @@ function netOf(h: string): { key: string; label: string } {
   return { key: '', label: 'LAN' }
 }
 
-// Color estable para un tag: el mismo nombre da siempre el mismo color de la paleta de carpetas
+// Color estable para un pool: el mismo nombre da siempre el mismo color de la paleta de carpetas
 export function tagColor(tag: string): string {
   let h = 0
   for (const ch of tag.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0
   return FOLDER_COLORS[h % FOLDER_COLORS.length]
-}
-
-// Tag de Proxmox que sirve para agrupar: los de descubrimiento de paneles (web-8080) no son agrupaciones
-export function groupTag(tags: string[] | undefined): string | undefined {
-  return (tags ?? []).map((t) => t.trim()).find((t) => t && !/^web-\d+(-https)?$/i.test(t))
 }
 
 function categoryOf(name: string): string {
@@ -162,25 +157,25 @@ export function buildMap(input: MapInput): MapNode[] {
   }
   const nodeByIp = singleNode ? out.find((n) => n.type === 'node') : undefined
 
-  // VMs y contenedores, colgados de su nodo (o de la carpeta de su tag, si se agrupa por tags)
+  // VMs y contenedores, colgados de su nodo (o de la carpeta de su pool, si se agrupa por pools)
   const guestByIp = new Map<string, MapNode>()
   const guestByVmid = new Map<number, MapNode>()
-  const tagOf = (g: MapInput['guests'][number]): string | undefined => groupTag(g.tags)
-  const tagCount = new Map<string, number>()
-  if (input.groupByTags) {
+  const poolOf = (g: MapInput['guests'][number]): string | undefined => g.pool?.trim() || undefined
+  const poolCount = new Map<string, number>()
+  if (input.groupByPools) {
     for (const g of input.guests) {
-      const tag = tagOf(g)
-      if (tag && !(g.template && !input.showTemplates)) tagCount.set(`${g.node}:${tag}`, (tagCount.get(`${g.node}:${tag}`) ?? 0) + 1)
+      const pool = poolOf(g)
+      if (pool && !(g.template && !input.showTemplates)) poolCount.set(`${g.node}:${pool}`, (poolCount.get(`${g.node}:${pool}`) ?? 0) + 1)
     }
   }
   for (const g of input.guests) {
     if (g.template && !input.showTemplates) continue
     let parent = have.has(`n:${g.node}`) ? `n:${g.node}` : ensureNet(primary.key, primary.label)
-    const tag = input.groupByTags ? tagOf(g) : undefined
-    const count = tag ? (tagCount.get(`${g.node}:${tag}`) ?? 0) : 0
-    if (tag && count >= 2) {
-      const id = `tag:${g.node}:${tag}`
-      if (!have.has(id)) add({ id, type: 'folder', label: tag, sub: `${count} máquinas`, status: 'unknown', parent, tagGroup: true, color: tagColor(tag) })
+    const pool = input.groupByPools ? poolOf(g) : undefined
+    const count = pool ? (poolCount.get(`${g.node}:${pool}`) ?? 0) : 0
+    if (pool && count >= 2) {
+      const id = `pool:${g.node}:${pool}`
+      if (!have.has(id)) add({ id, type: 'folder', label: pool, sub: `${count} máquinas`, status: 'unknown', parent, poolGroup: true, color: tagColor(pool) })
       parent = id
     }
     const n = add({
